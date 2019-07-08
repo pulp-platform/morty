@@ -1,0 +1,14 @@
+[package]
+name = "morty"
+version = "0.1.0"
+description = "A SystemVerilog source file pickler."
+authors = ["Florian Zaruba <zarubaf@iis.ee.ethz.ch>", "Fabian Schuiki <fschuiki@iis.ee.ethz.ch>"]
+edition = "2018"
+
+[dependencies]
+clap = "2"
+moore-svlog-syntax = { path = "/home/zarubaf/coding/moore/src/svlog/syntax" }
+moore-common = { path = "/home/zarubaf/coding/moore/src/common" }
+
+# moore-svlog-syntax = { git = "https://github.com/zarubaf/moore.git", branch = "master" }
+# moore-common = { git = "https://github.com/zarubaf/moore.git", branch = "master" }
