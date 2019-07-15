@@ -9,6 +9,6 @@ edition = "2018"
 clap = "2"
 moore-svlog-syntax = { path = "/home/zarubaf/coding/moore/src/svlog/syntax" }
 moore-common = { path = "/home/zarubaf/coding/moore/src/common" }
-
+serde = "1"
 # moore-svlog-syntax = { git = "https://github.com/zarubaf/moore.git", branch = "master" }
 # moore-common = { git = "https://github.com/zarubaf/moore.git", branch = "master" }

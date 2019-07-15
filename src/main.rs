@@ -42,6 +42,15 @@ fn main() {
                 .takes_value(true),
         )
         .arg(
+            Arg::with_name("def")
+                .short("D")
+                .value_name("DEFINE")
+                .help("Define a preprocesor macro")
+                .multiple(true)
+                .takes_value(true)
+                .number_of_values(1),
+        )
+        .arg(
             Arg::with_name("suffix")
                 .short("s")
                 .long("suffix")
@@ -78,6 +87,17 @@ fn main() {
         None => Vec::new(),
     };
 
+    // Handle user defines.
+    let defines: Vec<_> = match matches.values_of("def") {
+        Some(args) => args
+            .map(|x| {
+                let mut iter = x.split("=");
+                (iter.next().unwrap(), iter.next())
+            })
+            .collect(),
+        None => Vec::new(),
+    };
+
     // Parse the input files.
     let mut buffer = String::new();
     let sm = moore_common::source::get_source_manager();
@@ -91,7 +111,8 @@ fn main() {
         };
 
         // Preprocess the file and accumulate the contents into the pickle buffer.
-        let preproc = moore_svlog_syntax::preproc::Preprocessor::new(source, &include_paths);
+        let preproc =
+            moore_svlog_syntax::preproc::Preprocessor::new(source, &include_paths, &defines);
         let mut has_whitespace = false;
         let mut has_newline = false;
         use moore_svlog_syntax::cat::CatTokenKind;
@@ -130,7 +151,7 @@ fn main() {
 
     // Parse the preprocessed file.
     let source = sm.add("preproc", &buffer);
-    let preproc = moore_svlog_syntax::preproc::Preprocessor::new(source, &[]);
+    let preproc = moore_svlog_syntax::preproc::Preprocessor::new(source, &[], &[]);
     let lexer = moore_svlog_syntax::lexer::Lexer::new(preproc);
     let ast = match moore_svlog_syntax::parser::parse(lexer) {
         Ok(x) => x,
