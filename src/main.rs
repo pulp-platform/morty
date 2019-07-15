@@ -6,7 +6,10 @@
 use clap::{App, Arg};
 use moore_common::source::Span;
 use moore_svlog_syntax::ast;
+use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
+use std::fs::File;
+use std::io::BufReader;
 use std::path::Path;
 
 fn main() {
@@ -64,6 +67,15 @@ fn main() {
                 .help("Write preprocessed input files to stdout"),
         )
         .arg(
+            Arg::with_name("file_list")
+                .short("f")
+                .value_name("LIST")
+                .help("Gather files from a manifest")
+                .multiple(true)
+                .takes_value(true)
+                .number_of_values(1),
+        )
+        .arg(
             Arg::with_name("minimize")
                 .long("minimize")
                 .help("Minimize the output"),
@@ -76,72 +88,116 @@ fn main() {
         .arg(
             Arg::with_name("INPUT")
                 .help("The input files to compile")
-                .multiple(true)
-                .required(true),
+                .multiple(true),
         )
         .get_matches();
 
-    // Prepare a list of include paths.
-    let include_paths: Vec<_> = match matches.values_of("inc") {
-        Some(args) => args.map(|x| Path::new(x)).collect(),
-        None => Vec::new(),
-    };
+    let mut file_list = Vec::new();
 
     // Handle user defines.
-    let defines: Vec<_> = match matches.values_of("def") {
+    let defines: HashMap<_, _> = match matches.values_of("def") {
         Some(args) => args
             .map(|x| {
                 let mut iter = x.split("=");
-                (iter.next().unwrap(), iter.next())
+                (
+                    iter.next().unwrap().to_string(),
+                    iter.next().map(String::from),
+                )
             })
             .collect(),
-        None => Vec::new(),
+        None => HashMap::new(),
     };
+
+    // Prepare a list of include paths.
+    let include_dirs: Vec<_> = matches
+        .values_of("inc")
+        .into_iter()
+        .flat_map(|args| args)
+        .map(|x| x.to_string())
+        .collect();
+
+    for path in matches
+        .values_of("file_list")
+        .into_iter()
+        .flat_map(|args| args)
+    {
+        let file = File::open(path).unwrap();
+        let reader = BufReader::new(file);
+
+        // Read the JSON contents of the file as an instance of `User`.
+        let mut u: Vec<FileBundle> = serde_json::from_reader(reader).unwrap();
+        for fb in &mut u {
+            fb.defines.extend(defines.clone());
+            fb.include_dirs.extend(include_dirs.clone());
+        }
+
+        // println!("{:?}", u);
+        file_list.extend(u);
+    }
+
+    if let Some(file_names) = matches.values_of("INPUT") {
+        file_list.push(FileBundle {
+            include_dirs,
+            defines,
+            files: file_names.into_iter().map(String::from).collect(),
+        });
+    }
 
     // Parse the input files.
     let mut buffer = String::new();
     let sm = moore_common::source::get_source_manager();
     let minimize = matches.is_present("minimize");
     let strip_comments = matches.is_present("strip_comments");
-    for filename in matches.values_of("INPUT").unwrap() {
-        // Add the file to the source manager.
-        let source = match sm.open(&filename) {
-            Some(s) => s,
-            None => panic!("Unable to open input file '{}'", filename),
-        };
+    for bundle in file_list {
+        let bundle_include_dirs: Vec<_> = bundle.include_dirs.iter().map(Path::new).collect();
+        let bundle_defines: Vec<_> = bundle
+            .defines
+            .iter()
+            .map(|(name, value)| (name.as_str(), value.as_ref().map(|x| x.as_str())))
+            .collect();
+        for filename in bundle.files {
+            // Add the file to the source manager.
+            let source = match sm.open(&filename) {
+                Some(s) => s,
+                None => panic!("Unable to open input file '{}'", filename),
+            };
 
-        // Preprocess the file and accumulate the contents into the pickle buffer.
-        let preproc =
-            moore_svlog_syntax::preproc::Preprocessor::new(source, &include_paths, &defines);
-        let mut has_whitespace = false;
-        let mut has_newline = false;
-        use moore_svlog_syntax::cat::CatTokenKind;
-        for res in preproc {
-            let res = res.unwrap();
-            if minimize {
-                match res.0 {
-                    CatTokenKind::Newline => has_newline = true,
-                    CatTokenKind::Whitespace | CatTokenKind::Comment => has_whitespace = true,
-                    _ => {
-                        if has_newline {
-                            // buffer.push('\n');
-                            buffer.push(' ');
-                        } else if has_whitespace {
-                            buffer.push(' ');
+            // Preprocess the file and accumulate the contents into the pickle buffer.
+            let preproc = moore_svlog_syntax::preproc::Preprocessor::new(
+                source,
+                &bundle_include_dirs,
+                &bundle_defines,
+            );
+            let mut has_whitespace = false;
+            let mut has_newline = false;
+            use moore_svlog_syntax::cat::CatTokenKind;
+            for res in preproc {
+                let res = res.unwrap();
+                if minimize {
+                    match res.0 {
+                        CatTokenKind::Newline => has_newline = true,
+                        CatTokenKind::Whitespace | CatTokenKind::Comment => has_whitespace = true,
+                        _ => {
+                            if has_newline {
+                                // buffer.push('\n');
+                                buffer.push(' ');
+                            } else if has_whitespace {
+                                buffer.push(' ');
+                            }
+                            has_whitespace = false;
+                            has_newline = false;
+                            buffer.push_str(&res.1.extract());
                         }
-                        has_whitespace = false;
-                        has_newline = false;
-                        buffer.push_str(&res.1.extract());
                     }
+                } else {
+                    if strip_comments && res.0 == CatTokenKind::Comment {
+                        continue;
+                    }
+                    buffer.push_str(&res.1.extract());
                 }
-            } else {
-                if strip_comments && res.0 == CatTokenKind::Comment {
-                    continue;
-                }
-                buffer.push_str(&res.1.extract());
             }
+            buffer.push_str("\n");
         }
-        buffer.push_str("\n");
     }
 
     if matches.is_present("preproc") {
@@ -260,4 +316,11 @@ impl AstVisitor {
             }
         }
     }
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct FileBundle {
+    include_dirs: Vec<String>,
+    defines: HashMap<String, Option<String>>,
+    files: Vec<String>,
 }
