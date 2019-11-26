@@ -29,7 +29,7 @@ fn main() {
         .arg(
             Arg::with_name("exclude")
                 .short("e")
-                .long("exlude")
+                .long("exclude")
                 .value_name("MODULE")
                 .help("Add modules which should not be renamed")
                 .multiple(true)
