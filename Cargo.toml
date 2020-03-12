@@ -1,10 +1,9 @@
 [package]
 name = "morty"
-version = "0.1.0"
+version = "0.2.0"
 description = "A SystemVerilog source file pickler."
 authors = ["Florian Zaruba <zarubaf@iis.ee.ethz.ch>", "Fabian Schuiki <fschuiki@iis.ee.ethz.ch>"]
 edition = "2018"
-license = "MIT AND Apache-2.0"
 license-file = "LICENSE"
 keywords = ["hardware development", "system verilog"]
 categories = ["command-line-utilities"]
