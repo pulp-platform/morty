@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ## Added
 - Add minimzed testcases.
 - Add renaming of packages.
+- Add interface renaming.
 
 ## Changed
 - Use [sv-parser](https://github.com/dalance/sv-parser) as the main SV parser.
