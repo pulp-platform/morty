@@ -14,5 +14,5 @@ module module_4 #()(
 );
 
 input clk_i;
-
-endmodule
+    module_1 i_module_1();
+endmodule : module_4

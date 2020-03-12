@@ -48,9 +48,8 @@ impl<'a> Pickle<'a> {
         }
         debug!("Declaration `{}`: {:?}", module_name, loc);
         self.rename_table.insert(module_name, new_name.clone());
-        self.replace_table.push((loc.offset, loc.len, new_name));
     }
-    /// Register a usage such as an instantiation or package import.
+    /// Register a usage of the identifier.
     fn register_usage(&mut self, syntax_tree: &SyntaxTree, id: RefNode) -> () {
         let (inst_name, loc) = get_identifier(&syntax_tree, id);
         let new_name = match self.rename_table.get(&inst_name) {
@@ -281,16 +280,16 @@ fn main() {
                         // Module declarations.
                         RefNode::ModuleDeclarationAnsi(x) => {
                             // unwrap_node! gets the nearest ModuleIdentifier from x
-                            let id = unwrap_node!(x, ModuleIdentifier).unwrap();
+                            let id = unwrap_node!(x, SimpleIdentifier).unwrap();
                             pickle.register_declaration(&syntax_tree, id);
                         }
                         RefNode::ModuleDeclarationNonansi(x) => {
-                            let id = unwrap_node!(x, ModuleIdentifier).unwrap();
+                            let id = unwrap_node!(x, SimpleIdentifier).unwrap();
                             pickle.register_declaration(&syntax_tree, id);
                         }
-                        // Instantiations.
-                        RefNode::ModuleInstantiation(x) => {
-                            let id = unwrap_node!(x, ModuleIdentifier).unwrap();
+                        // Instantiations, end-labels.
+                        RefNode::ModuleIdentifier(x) => {
+                            let id = unwrap_node!(x, SimpleIdentifier).unwrap();
                             pickle.register_usage(&syntax_tree, id);
                         }
                         // Interface Declaration.
@@ -298,8 +297,8 @@ fn main() {
                             let id = unwrap_node!(x, SimpleIdentifier).unwrap();
                             pickle.register_declaration(&syntax_tree, id);
                         }
-                        // Interface in port header.
-                        RefNode::InterfacePortHeader(x) => {
+                        // Interface identifier.
+                        RefNode::InterfaceIdentifier(x) => {
                             let id = unwrap_node!(x, SimpleIdentifier).unwrap();
                             pickle.register_usage(&syntax_tree, id);
                         }
@@ -315,12 +314,7 @@ fn main() {
                             }
                         }
                         // Package Import.
-                        RefNode::PackageImportItem(x) => {
-                            let id = unwrap_node!(x, SimpleIdentifier).unwrap();
-                            pickle.register_usage(&syntax_tree, id);
-                        }
-                        // Package Scope.
-                        RefNode::PackageScopePackage(x) => {
+                        RefNode::PackageIdentifier(x) => {
                             let id = unwrap_node!(x, SimpleIdentifier).unwrap();
                             pickle.register_usage(&syntax_tree, id);
                         }
