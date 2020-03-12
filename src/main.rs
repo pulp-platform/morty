@@ -293,6 +293,16 @@ fn main() {
                             let id = unwrap_node!(x, ModuleIdentifier).unwrap();
                             pickle.register_usage(&syntax_tree, id);
                         }
+                        // Interface Declaration.
+                        RefNode::InterfaceDeclaration(x) => {
+                            let id = unwrap_node!(x, SimpleIdentifier).unwrap();
+                            pickle.register_declaration(&syntax_tree, id);
+                        }
+                        // Interface in port header.
+                        RefNode::InterfacePortHeader(x) => {
+                            let id = unwrap_node!(x, SimpleIdentifier).unwrap();
+                            pickle.register_usage(&syntax_tree, id);
+                        }
                         // Package declarations.
                         RefNode::PackageDeclaration(x) => {
                             let id = unwrap_node!(x, SimpleIdentifier).unwrap();
