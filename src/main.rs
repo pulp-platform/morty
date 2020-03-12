@@ -3,8 +3,9 @@
 
 // SPDX-License-Identifier: Apache-2.0
 
+use anyhow::Error;
 use clap::{App, Arg};
-use log::{debug, error, info, trace};
+use log::{debug, info, trace};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
@@ -12,9 +13,13 @@ use std::io::BufReader;
 use std::path::Path;
 use std::process::exit;
 use sv_parser::preprocess;
+use sv_parser::Error as SvParserError;
+mod printer;
 use sv_parser::{parse_sv_str, unwrap_node, Define, DefineText, Locate, RefNode, SyntaxTree};
 extern crate log;
 extern crate simple_logger;
+use std::io::Write;
+use tempfile::tempdir;
 
 /// Struct containing information about
 /// what should be pickled and how.
@@ -62,7 +67,7 @@ impl<'a> Pickle<'a> {
     }
 }
 
-fn main() {
+fn main() -> Result<(), Error> {
     let matches = App::new(env!("CARGO_PKG_NAME"))
         .version(clap::crate_version!())
         .author(clap::crate_authors!())
@@ -261,13 +266,22 @@ fn main() {
         // Just preprocess.
         if matches.is_present("preproc") {
             println!("{}", buffer);
-            return;
+            return Ok(());
         }
+
+        // Create a temporary file where the pickled sources live.
+        let dir = tempdir()?;
+
+        let file_path = dir.path().join("pickle.sv");
+        let mut tmpfile = File::create(&file_path)?;
+
+        writeln!(tmpfile, "{}", buffer)?;
+        let mut printer = printer::Printer::new();
 
         // Parse the preprocessed SV file.
         match parse_sv_str(
             buffer.as_str(),
-            Path::new(""), // dummy path
+            file_path,
             &bundle_defines,
             &bundle_include_dirs,
             false,
@@ -323,7 +337,7 @@ fn main() {
                 }
             }
             Err(err) => {
-                error!("{:?}", err);
+                print_parse_error(&mut printer, err, false)?;
                 exit(1);
             }
         }
@@ -341,6 +355,7 @@ fn main() {
         }
         print!("{}", &buffer[pos..]);
     }
+    Ok(())
 }
 
 fn get_identifier(st: &SyntaxTree, node: RefNode) -> (String, Locate) {
@@ -362,4 +377,33 @@ struct FileBundle {
     include_dirs: Vec<String>,
     defines: HashMap<String, Option<String>>,
     files: Vec<String>,
+}
+
+#[cfg_attr(tarpaulin, skip)]
+fn print_parse_error(
+    printer: &mut printer::Printer,
+    error: SvParserError,
+    single: bool,
+) -> Result<(), Error> {
+    match error {
+        SvParserError::Parse(Some((path, pos))) => {
+            printer.print_parse_error(&path, pos, single)?;
+        }
+        SvParserError::Include { source: x } => {
+            if let SvParserError::File { path: x, .. } = *x {
+                printer.print_error(&format!("failed to include '{}'", x.to_string_lossy()))?;
+            }
+        }
+        SvParserError::DefineArgNotFound(x) => {
+            printer.print_error(&format!("define argument '{}' is not found", x))?;
+        }
+        SvParserError::DefineNotFound(x) => {
+            printer.print_error(&format!("define '{}' is not found", x))?;
+        }
+        x => {
+            printer.print_error(&format!("{}", x))?;
+        }
+    }
+
+    Ok(())
 }

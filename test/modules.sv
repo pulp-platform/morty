@@ -9,7 +9,7 @@ module /* test */ module_3 #()(
 );
 endmodule
 
-module module_4 #()(
+module module_4 #()()(
     clk_i
 );
 
