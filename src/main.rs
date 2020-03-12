@@ -254,6 +254,8 @@ fn main() -> Result<(), Error> {
             match preprocess(filename, &bundle_defines, &bundle_include_dirs, false) {
                 Ok(preprocessed) => {
                     buffer.push_str(preprocessed.0.text());
+                    // Enforce a new line between files.
+                    buffer.push_str("\n");
                 }
                 Err(err) => {
                     eprintln!("{:?}", err);
@@ -268,93 +270,95 @@ fn main() -> Result<(), Error> {
             println!("{}", buffer);
             return Ok(());
         }
+    }
+    info!("Finished reading source files.");
+    // Create a temporary file where the pickled sources live.
+    let dir = tempdir()?;
 
-        // Create a temporary file where the pickled sources live.
-        let dir = tempdir()?;
+    let file_path = dir.path().join("pickle.sv");
+    let mut tmpfile = File::create(&file_path)?;
 
-        let file_path = dir.path().join("pickle.sv");
-        let mut tmpfile = File::create(&file_path)?;
+    writeln!(tmpfile, "{}", buffer)?;
+    let mut printer = printer::Printer::new();
 
-        writeln!(tmpfile, "{}", buffer)?;
-        let mut printer = printer::Printer::new();
-
-        // Parse the preprocessed SV file.
-        match parse_sv_str(
-            buffer.as_str(),
-            file_path,
-            &bundle_defines,
-            &bundle_include_dirs,
-            false,
-        ) {
-            Ok((syntax_tree, _)) => {
-                // SV parser implements an iterator on the AST.
-                for node in &syntax_tree {
-                    trace!("{:?}", node);
-                    match node {
-                        // Module declarations.
-                        RefNode::ModuleDeclarationAnsi(x) => {
-                            // unwrap_node! gets the nearest ModuleIdentifier from x
-                            let id = unwrap_node!(x, SimpleIdentifier).unwrap();
-                            pickle.register_declaration(&syntax_tree, id);
-                        }
-                        RefNode::ModuleDeclarationNonansi(x) => {
-                            let id = unwrap_node!(x, SimpleIdentifier).unwrap();
-                            pickle.register_declaration(&syntax_tree, id);
-                        }
-                        // Instantiations, end-labels.
-                        RefNode::ModuleIdentifier(x) => {
-                            let id = unwrap_node!(x, SimpleIdentifier).unwrap();
-                            pickle.register_usage(&syntax_tree, id);
-                        }
-                        // Interface Declaration.
-                        RefNode::InterfaceDeclaration(x) => {
-                            let id = unwrap_node!(x, SimpleIdentifier).unwrap();
-                            pickle.register_declaration(&syntax_tree, id);
-                        }
-                        // Interface identifier.
-                        RefNode::InterfaceIdentifier(x) => {
-                            let id = unwrap_node!(x, SimpleIdentifier).unwrap();
-                            pickle.register_usage(&syntax_tree, id);
-                        }
-                        // Package declarations.
-                        RefNode::PackageDeclaration(x) => {
-                            let id = unwrap_node!(x, SimpleIdentifier).unwrap();
-                            pickle.register_declaration(&syntax_tree, id);
-                        }
-                        // Package Qualifier (i.e., explicit package constants).
-                        RefNode::ClassQualifierOrPackageScope(x) => {
-                            if let Some(id) = unwrap_node!(x, SimpleIdentifier) {
-                                pickle.register_usage(&syntax_tree, id);
-                            }
-                        }
-                        // Package Import.
-                        RefNode::PackageIdentifier(x) => {
-                            let id = unwrap_node!(x, SimpleIdentifier).unwrap();
-                            pickle.register_usage(&syntax_tree, id);
-                        }
-                        _ => (),
+    info!("Parsing buffer.");
+    // Parse the preprocessed SV file.
+    match parse_sv_str(
+        buffer.as_str(),
+        file_path,
+        &HashMap::new(),
+        &Vec::<String>::new(),
+        false,
+    ) {
+        Ok((syntax_tree, _)) => {
+            // SV parser implements an iterator on the AST.
+            for node in &syntax_tree {
+                trace!("{:?}", node);
+                match node {
+                    // Module declarations.
+                    RefNode::ModuleDeclarationAnsi(x) => {
+                        // unwrap_node! gets the nearest ModuleIdentifier from x
+                        let id = unwrap_node!(x, SimpleIdentifier).unwrap();
+                        pickle.register_declaration(&syntax_tree, id);
                     }
+                    RefNode::ModuleDeclarationNonansi(x) => {
+                        let id = unwrap_node!(x, SimpleIdentifier).unwrap();
+                        pickle.register_declaration(&syntax_tree, id);
+                    }
+                    // Instantiations, end-labels.
+                    RefNode::ModuleIdentifier(x) => {
+                        let id = unwrap_node!(x, SimpleIdentifier).unwrap();
+                        pickle.register_usage(&syntax_tree, id);
+                    }
+                    // Interface Declaration.
+                    RefNode::InterfaceDeclaration(x) => {
+                        let id = unwrap_node!(x, SimpleIdentifier).unwrap();
+                        pickle.register_declaration(&syntax_tree, id);
+                    }
+                    // Interface identifier.
+                    RefNode::InterfaceIdentifier(x) => {
+                        let id = unwrap_node!(x, SimpleIdentifier).unwrap();
+                        pickle.register_usage(&syntax_tree, id);
+                    }
+                    // Package declarations.
+                    RefNode::PackageDeclaration(x) => {
+                        let id = unwrap_node!(x, SimpleIdentifier).unwrap();
+                        pickle.register_declaration(&syntax_tree, id);
+                    }
+                    // Package Qualifier (i.e., explicit package constants).
+                    RefNode::ClassQualifierOrPackageScope(x) => {
+                        if let Some(id) = unwrap_node!(x, SimpleIdentifier) {
+                            pickle.register_usage(&syntax_tree, id);
+                        }
+                    }
+                    // Package Import.
+                    RefNode::PackageIdentifier(x) => {
+                        let id = unwrap_node!(x, SimpleIdentifier).unwrap();
+                        pickle.register_usage(&syntax_tree, id);
+                    }
+                    _ => (),
                 }
             }
-            Err(err) => {
-                print_parse_error(&mut printer, err, false)?;
-                exit(1);
-            }
         }
-
-        // Replace according to `replace_table`.
-        // Apply the replacements.
-        pickle.replace_table.sort();
-        debug!("{:?}", pickle.replace_table);
-        let mut pos = 0;
-        for (offset, len, repl) in pickle.replace_table.iter() {
-            trace!("Replacing: {},{}, {}", offset, len, repl);
-            print!("{}", &buffer[pos..*offset]);
-            print!("{}", repl);
-            pos = offset + len;
+        Err(err) => {
+            print_parse_error(&mut printer, err, false)?;
+            exit(1);
         }
-        print!("{}", &buffer[pos..]);
     }
+
+    // Replace according to `replace_table`.
+    // Apply the replacements.
+    pickle.replace_table.sort();
+    debug!("{:?}", pickle.replace_table);
+    let mut pos = 0;
+    for (offset, len, repl) in pickle.replace_table.iter() {
+        trace!("Replacing: {},{}, {}", offset, len, repl);
+        print!("{}", &buffer[pos..*offset]);
+        print!("{}", repl);
+        pos = offset + len;
+    }
+    print!("{}", &buffer[pos..]);
+
     Ok(())
 }
 
