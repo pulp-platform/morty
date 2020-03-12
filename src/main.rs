@@ -4,13 +4,64 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use clap::{App, Arg};
-use moore_common::source::Span;
-use moore_svlog_syntax::ast;
+use log::{debug, error, info, trace};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::BufReader;
 use std::path::Path;
+use std::process::exit;
+use sv_parser::preprocess;
+use sv_parser::{parse_sv_str, unwrap_node, Define, DefineText, Locate, RefNode, SyntaxTree};
+extern crate log;
+extern crate simple_logger;
+
+/// Struct containing information about
+/// what should be pickled and how.
+#[derive(Debug)]
+struct Pickle<'a> {
+    /// Optional name prefix.
+    prefix: Option<&'a str>,
+    /// Optional name suffix.
+    suffix: Option<&'a str>,
+    /// Declarations which are excluded from re-naming.
+    exclude: HashSet<&'a str>,
+    /// Table containing thing that should be re-named.
+    rename_table: HashMap<String, String>,
+    /// Locations of text which should be replaced.
+    replace_table: Vec<(usize, usize, String)>,
+}
+
+impl<'a> Pickle<'a> {
+    /// Register a declaration such as a package or module.
+    fn register_declaration(&mut self, syntax_tree: &SyntaxTree, id: RefNode) -> () {
+        let (module_name, loc) = get_identifier(syntax_tree, id);
+        if self.exclude.contains(module_name.as_str()) {
+            return;
+        }
+        let mut new_name = module_name.clone();
+        if let Some(prefix) = self.prefix {
+            new_name = format!("{}{}", prefix, new_name);
+        }
+        if let Some(suffix) = self.suffix {
+            new_name = format!("{}{}", new_name, suffix);
+        }
+        debug!("Declaration `{}`: {:?}", module_name, loc);
+        self.rename_table.insert(module_name, new_name.clone());
+        self.replace_table.push((loc.offset, loc.len, new_name));
+    }
+    /// Register a usage such as an instantiation or package import.
+    fn register_usage(&mut self, syntax_tree: &SyntaxTree, id: RefNode) -> () {
+        let (inst_name, loc) = get_identifier(&syntax_tree, id);
+        let new_name = match self.rename_table.get(&inst_name) {
+            Some(x) => x,
+            None => return,
+        };
+        debug!("Usage `{}`: {:?}", inst_name, loc);
+        self.replace_table
+            .push((loc.offset, loc.len, new_name.clone()));
+    }
+}
 
 fn main() {
     let matches = App::new(env!("CARGO_PKG_NAME"))
@@ -35,6 +86,12 @@ fn main() {
                 .multiple(true)
                 .takes_value(true)
                 .number_of_values(1),
+        )
+        .arg(
+            Arg::with_name("v")
+                .short("v")
+                .multiple(true)
+                .help("Sets the level of verbosity"),
         )
         .arg(
             Arg::with_name("prefix")
@@ -75,22 +132,32 @@ fn main() {
                 .takes_value(true)
                 .number_of_values(1),
         )
-        .arg(
-            Arg::with_name("minimize")
-                .long("minimize")
-                .help("Minimize the output"),
-        )
-        .arg(
-            Arg::with_name("strip_comments")
-                .long("strip-comments")
-                .help("Strip comments from the output"),
-        )
+        // Currently not available.
+        // .arg(
+        //     Arg::with_name("minimize")
+        //         .long("minimize")
+        //         .help("Minimize the output"),
+        // )
+        // .arg(
+        //     Arg::with_name("strip_comments")
+        //         .long("strip-comments")
+        //         .help("Strip comments from the output"),
+        // )
         .arg(
             Arg::with_name("INPUT")
                 .help("The input files to compile")
                 .multiple(true),
         )
         .get_matches();
+
+    // Instantiate a new logger with the verbosity level the user requested.
+    simple_logger::init_with_level(match matches.occurrences_of("v") {
+        0 => log::Level::Warn,
+        1 => log::Level::Info,
+        2 => log::Level::Debug,
+        3 | _ => log::Level::Trace,
+    })
+    .unwrap();
 
     let mut file_list = Vec::new();
 
@@ -130,8 +197,6 @@ fn main() {
             fb.defines.extend(defines.clone());
             fb.include_dirs.extend(include_dirs.clone());
         }
-
-        // println!("{:?}", u);
         file_list.extend(u);
     }
 
@@ -143,178 +208,148 @@ fn main() {
         });
     }
 
-    // Parse the input files.
-    let mut buffer = String::new();
-    let sm = moore_common::source::get_source_manager();
-    let minimize = matches.is_present("minimize");
-    let strip_comments = matches.is_present("strip_comments");
-    for bundle in file_list {
-        let bundle_include_dirs: Vec<_> = bundle.include_dirs.iter().map(Path::new).collect();
-        let bundle_defines: Vec<_> = bundle
-            .defines
-            .iter()
-            .map(|(name, value)| (name.as_str(), value.as_ref().map(|x| x.as_str())))
-            .collect();
-        for filename in bundle.files {
-            // Add the file to the source manager.
-            let source = match sm.open(&filename) {
-                Some(s) => s,
-                None => panic!("Unable to open input file '{}'", filename),
-            };
-
-            // Preprocess the file and accumulate the contents into the pickle buffer.
-            let preproc = moore_svlog_syntax::preproc::Preprocessor::new(
-                source,
-                &bundle_include_dirs,
-                &bundle_defines,
-            );
-            let mut has_whitespace = false;
-            let mut has_newline = false;
-            use moore_svlog_syntax::cat::CatTokenKind;
-            for res in preproc {
-                let res = res.unwrap();
-                if minimize {
-                    match res.0 {
-                        CatTokenKind::Newline => has_newline = true,
-                        CatTokenKind::Whitespace | CatTokenKind::Comment => has_whitespace = true,
-                        _ => {
-                            if has_newline {
-                                // buffer.push('\n');
-                                buffer.push(' ');
-                            } else if has_whitespace {
-                                buffer.push(' ');
-                            }
-                            has_whitespace = false;
-                            has_newline = false;
-                            buffer.push_str(&res.1.extract());
-                        }
-                    }
-                } else {
-                    if strip_comments && res.0 == CatTokenKind::Comment {
-                        continue;
-                    }
-                    buffer.push_str(&res.1.extract());
-                }
-            }
-            buffer.push_str("\n");
-        }
-    }
-
-    if matches.is_present("preproc") {
-        println!("{}", buffer);
-        return;
-    }
-
-    // Parse the preprocessed file.
-    let source = sm.add("preproc", &buffer);
-    let preproc = moore_svlog_syntax::preproc::Preprocessor::new(source, &[], &[]);
-    let lexer = moore_svlog_syntax::lexer::Lexer::new(preproc);
-    let ast = match moore_svlog_syntax::parser::parse(lexer) {
-        Ok(x) => x,
-        Err(()) => std::process::exit(1),
-    };
-    // eprintln!("parsed {} items", ast.items.len());
-
-    // Walk the AST.
-    let mut visitor = AstVisitor::default();
-    visitor.visit_root(&ast);
-    // eprintln!("{:#?}", visitor);
-
-    // Collect renaming options.
-    let prefix = matches.value_of("prefix");
-    let suffix = matches.value_of("suffix");
     let mut exclude = HashSet::new();
     exclude.extend(matches.values_of("exclude").into_iter().flat_map(|v| v));
-    // exclude.insert("billywig".to_owned());
-    // eprintln!("exclude: {:?}", exclude);
 
-    // Create a rename table.
-    let mut rename_table = HashMap::new();
-    let mut replace_table = Vec::new();
+    let mut pickle = Pickle {
+        // Collect renaming options.
+        prefix: matches.value_of("prefix"),
+        suffix: matches.value_of("suffix"),
+        exclude: exclude,
+        // Create a rename table.
+        rename_table: HashMap::new(),
+        replace_table: Vec::new(),
+    };
 
-    for (module_name, module_span) in &visitor.module_decls {
-        if exclude.contains(module_name.as_str()) {
-            continue;
-        }
-        let mut new_name = module_name.clone();
-        if let Some(prefix) = prefix {
-            new_name = format!("{}{}", prefix, new_name);
-        }
-        if let Some(suffix) = suffix {
-            new_name = format!("{}{}", new_name, suffix);
-        }
-        rename_table.insert(module_name, new_name.clone());
-        replace_table.push((module_span.begin, module_span.end, new_name));
-    }
-    // eprintln!("{:#?}", rename_table);
-
-    // Rename instances.
-    for (inst_name, inst_span) in &visitor.module_insts {
-        let new_name = match rename_table.get(&inst_name) {
-            Some(x) => x,
-            None => continue,
-        };
-        replace_table.push((inst_span.begin, inst_span.end, new_name.clone()));
-    }
-
-    // Apply the replacements.
-    replace_table.sort();
-    // eprintln!("{:#?}", replace_table);
-    let mut pos = 0;
-    for (begin, end, repl) in replace_table {
-        print!("{}", &buffer[pos..begin]);
-        print!("{}", repl);
-        pos = end;
-    }
-    print!("{}", &buffer[pos..]);
-}
-
-#[derive(Debug, Default)]
-struct AstVisitor {
-    module_decls: Vec<(String, Span)>,
-    pkg_decls: Vec<(String, Span)>,
-    module_insts: Vec<(String, Span)>,
-}
-
-impl AstVisitor {
-    fn visit_root(&mut self, root: &ast::Root) {
-        for item in &root.items {
-            match item {
-                ast::Item::Module(decl) => self.visit_module(decl),
-                ast::Item::Package(decl) => self.visit_package(decl),
-                _ => (),
+    // Parse the input files.
+    let mut buffer = String::new();
+    // let minimize = matches.is_present("minimize");
+    // let strip_comments = matches.is_present("strip_comments");
+    for bundle in file_list {
+        let bundle_include_dirs: Vec<_> = bundle.include_dirs.iter().map(Path::new).collect();
+        // Convert the preprocessor defines into the appropriate format which is understood by `sv-parser`
+        let bundle_defines: HashMap<_, _> = bundle
+            .defines
+            .iter()
+            .map(|(name, value)| {
+                // If there is a define text add it.
+                let define_text = match value {
+                    Some(x) => Some(DefineText::new(String::from(x), None)),
+                    None => None,
+                };
+                (
+                    name.clone(),
+                    Some(Define::new(name.clone(), vec![], define_text)),
+                )
+            })
+            .collect();
+        // For each file in the file bundle preprocess and parse it.
+        for filename in bundle.files {
+            info!("{:?}", filename);
+            // Preprocess the verilog files.
+            match preprocess(filename, &bundle_defines, &bundle_include_dirs, false) {
+                Ok(preprocessed) => {
+                    buffer.push_str(preprocessed.0.text());
+                }
+                Err(err) => {
+                    eprintln!("{:?}", err);
+                    exit(1);
+                }
             }
+            // buffer.push_str(&std::fs::read_to_string(filename).unwrap());
         }
-    }
 
-    fn visit_module(&mut self, module: &ast::ModDecl) {
-        self.module_decls
-            .push((module.name.to_string(), module.name_span));
-        self.visit_hierachy_items(&module.items);
-    }
+        // Just preprocess.
+        if matches.is_present("preproc") {
+            println!("{}", buffer);
+            return;
+        }
 
-    fn visit_package(&mut self, pkg: &ast::PackageDecl) {
-        self.pkg_decls.push((pkg.name.to_string(), pkg.name_span));
-        self.visit_hierachy_items(&pkg.items);
-    }
-
-    fn visit_hierachy_items(&mut self, items: &[ast::HierarchyItem]) {
-        for hitem in items {
-            match hitem {
-                ast::HierarchyItem::Inst(inst) => self
-                    .module_insts
-                    .push((inst.target.name.to_string(), inst.target.span)),
-                ast::HierarchyItem::GenerateRegion(_, items) => self.visit_hierachy_items(items),
-                ast::HierarchyItem::GenerateFor(gen) => self.visit_hierachy_items(&gen.block.items),
-                ast::HierarchyItem::GenerateIf(gen) => {
-                    self.visit_hierachy_items(&gen.main_block.items);
-                    if let Some(gen) = &gen.else_block {
-                        self.visit_hierachy_items(&gen.items);
+        // Parse the preprocessed SV file.
+        match parse_sv_str(
+            buffer.as_str(),
+            Path::new(""), // dummy path
+            &bundle_defines,
+            &bundle_include_dirs,
+            false,
+        ) {
+            Ok((syntax_tree, _)) => {
+                // SV parser implements an iterator on the AST.
+                for node in &syntax_tree {
+                    trace!("{:?}", node);
+                    match node {
+                        // Module declarations.
+                        RefNode::ModuleDeclarationAnsi(x) => {
+                            // unwrap_node! gets the nearest ModuleIdentifier from x
+                            let id = unwrap_node!(x, ModuleIdentifier).unwrap();
+                            pickle.register_declaration(&syntax_tree, id);
+                        }
+                        RefNode::ModuleDeclarationNonansi(x) => {
+                            let id = unwrap_node!(x, ModuleIdentifier).unwrap();
+                            pickle.register_declaration(&syntax_tree, id);
+                        }
+                        // Instantiations.
+                        RefNode::ModuleInstantiation(x) => {
+                            let id = unwrap_node!(x, ModuleIdentifier).unwrap();
+                            pickle.register_usage(&syntax_tree, id);
+                        }
+                        // Package declarations.
+                        RefNode::PackageDeclaration(x) => {
+                            let id = unwrap_node!(x, SimpleIdentifier).unwrap();
+                            pickle.register_declaration(&syntax_tree, id);
+                        }
+                        // Package Qualifier (i.e., explicit package constants).
+                        RefNode::ClassQualifierOrPackageScope(x) => {
+                            if let Some(id) = unwrap_node!(x, SimpleIdentifier) {
+                                pickle.register_usage(&syntax_tree, id);
+                            }
+                        }
+                        // Package Import.
+                        RefNode::PackageImportItem(x) => {
+                            let id = unwrap_node!(x, SimpleIdentifier).unwrap();
+                            pickle.register_usage(&syntax_tree, id);
+                        }
+                        // Package Scope.
+                        RefNode::PackageScopePackage(x) => {
+                            let id = unwrap_node!(x, SimpleIdentifier).unwrap();
+                            pickle.register_usage(&syntax_tree, id);
+                        }
+                        _ => (),
                     }
                 }
-                _ => (),
+            }
+            Err(err) => {
+                error!("{:?}", err);
+                exit(1);
             }
         }
+
+        // Replace according to `replace_table`.
+        // Apply the replacements.
+        pickle.replace_table.sort();
+        debug!("{:?}", pickle.replace_table);
+        let mut pos = 0;
+        for (offset, len, repl) in pickle.replace_table.iter() {
+            trace!("Replacing: {},{}, {}", offset, len, repl);
+            print!("{}", &buffer[pos..*offset]);
+            print!("{}", repl);
+            pos = offset + len;
+        }
+        print!("{}", &buffer[pos..]);
+    }
+}
+
+fn get_identifier(st: &SyntaxTree, node: RefNode) -> (String, Locate) {
+    // unwrap_node! can take multiple types
+    match unwrap_node!(node, SimpleIdentifier, EscapedIdentifier) {
+        Some(RefNode::SimpleIdentifier(x)) => {
+            // Original string can be got by SyntaxTree::get_str(self, locate: &Locate)
+            return (String::from(st.get_str(&x.nodes.0).unwrap()), x.nodes.0);
+        }
+        Some(RefNode::EscapedIdentifier(x)) => {
+            return (String::from(st.get_str(&x.nodes.0).unwrap()), x.nodes.0);
+        }
+        _ => panic!("No identifier found."),
     }
 }
 

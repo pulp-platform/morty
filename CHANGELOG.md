@@ -11,6 +11,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - Based on [Moore](https://github.com/fabianschuiki/moore) parser.
 
 ## Unreleased
+## Added
+- Add minimzed testcases.
+- Add renaming of packages.
 
-
-
+## Changed
+- Use [sv-parser](https://github.com/dalance/sv-parser) as the main SV parser.

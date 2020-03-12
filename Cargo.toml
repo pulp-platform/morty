@@ -7,9 +7,12 @@ edition = "2018"
 
 [dependencies]
 clap = "2"
-moore-svlog-syntax = { path = "/home/zarubaf/coding/moore/src/svlog/syntax" }
-moore-common = { path = "/home/zarubaf/coding/moore/src/common" }
+sv-parser = "0.6.3"
+failure = "0.1.7"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-# moore-svlog-syntax = { git = "https://github.com/zarubaf/moore.git", branch = "master" }
-# moore-common = { git = "https://github.com/zarubaf/moore.git", branch = "master" }
+log = "0.4"
+simple_logger = "1.6.0"
+
+[patch.crates-io]
+sv-parser = {path = "sv-parser/sv-parser"}
