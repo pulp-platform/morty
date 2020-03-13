@@ -308,6 +308,9 @@ fn main() -> Result<(), Error> {
                     // Instantiations, end-labels.
                     RefNode::ModuleIdentifier(x) => {
                         let id = unwrap_node!(x, SimpleIdentifier).unwrap();
+                        // an instantiation is potentially also a declaration (order doesn't matter)
+                        pickle.register_declaration(&syntax_tree, id);
+                        let id = unwrap_node!(x, SimpleIdentifier).unwrap();
                         pickle.register_usage(&syntax_tree, id);
                     }
                     // Interface Declaration.

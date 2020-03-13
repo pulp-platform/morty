@@ -1,4 +1,5 @@
 module module_1;
+    module_2 i_module_2();
 endmodule
 
 module module_2 #();
@@ -9,7 +10,7 @@ module /* test */ module_3 #()(
 );
 endmodule
 
-module module_4 #()()(
+module module_4 #()(
     clk_i
 );
 
