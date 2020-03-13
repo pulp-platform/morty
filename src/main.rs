@@ -326,10 +326,9 @@ fn main() -> Result<(), Error> {
                         pickle.register_declaration(&syntax_tree, id);
                     }
                     // Package Qualifier (i.e., explicit package constants).
-                    RefNode::ClassQualifierOrPackageScope(x) => {
-                        if let Some(id) = unwrap_node!(x, SimpleIdentifier) {
-                            pickle.register_usage(&syntax_tree, id);
-                        }
+                    RefNode::ClassScope(x) => {
+                        let id = unwrap_node!(x, SimpleIdentifier).unwrap();
+                        pickle.register_usage(&syntax_tree, id);
                     }
                     // Package Import.
                     RefNode::PackageIdentifier(x) => {
