@@ -6,7 +6,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## Unreleased
 ## Fixed
+- Only re-name defined packages and modules.
+- Bump `sv-parser` to `0.6.4`.
+
 ## 0.2.2 - 2020-03-13
+## Fixed
 - Re-name modules before they have been declared.
 
 ## 0.2.1 - 2020-03-13
