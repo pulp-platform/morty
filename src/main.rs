@@ -305,28 +305,31 @@ fn main() -> Result<(), Error> {
                         let id = unwrap_node!(x, SimpleIdentifier).unwrap();
                         pickle.register_declaration(&syntax_tree, id);
                     }
-                    // Instantiations, end-labels.
-                    RefNode::ModuleIdentifier(x) => {
-                        let id = unwrap_node!(x, SimpleIdentifier).unwrap();
-                        // an instantiation is potentially also a declaration (order doesn't matter)
-                        pickle.register_declaration(&syntax_tree, id);
-                        let id = unwrap_node!(x, SimpleIdentifier).unwrap();
-                        pickle.register_usage(&syntax_tree, id);
-                    }
                     // Interface Declaration.
                     RefNode::InterfaceDeclaration(x) => {
                         let id = unwrap_node!(x, SimpleIdentifier).unwrap();
                         pickle.register_declaration(&syntax_tree, id);
                     }
-                    // Interface identifier.
-                    RefNode::InterfaceIdentifier(x) => {
-                        let id = unwrap_node!(x, SimpleIdentifier).unwrap();
-                        pickle.register_usage(&syntax_tree, id);
-                    }
                     // Package declarations.
                     RefNode::PackageDeclaration(x) => {
                         let id = unwrap_node!(x, SimpleIdentifier).unwrap();
                         pickle.register_declaration(&syntax_tree, id);
+                    }
+                    _ => (),
+                }
+            }
+            // Iterate again and check for usage
+            for node in &syntax_tree {
+                match node {
+                    // Instantiations, end-labels.
+                    RefNode::ModuleIdentifier(x) => {
+                        let id = unwrap_node!(x, SimpleIdentifier).unwrap();
+                        pickle.register_usage(&syntax_tree, id);
+                    }
+                    // Interface identifier.
+                    RefNode::InterfaceIdentifier(x) => {
+                        let id = unwrap_node!(x, SimpleIdentifier).unwrap();
+                        pickle.register_usage(&syntax_tree, id);
                     }
                     // Package Qualifier (i.e., explicit package constants).
                     RefNode::ClassScope(x) => {
