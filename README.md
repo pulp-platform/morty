@@ -6,7 +6,11 @@ _Come on, flip the pickle, Morty, you're not gonna regret it. The payoff is huge
 
 Morty reads SystemVerilog files and pickles them into a single file for easier handling. Optionally it allows to re-name modules with a common prefix or suffix. This allows for easier management of larger projects (they just become a single file). By making them unique they can also depend on different versions of the same dependency without namespace clashes.
 
-## Installation
+## Install
+
+We provide pre-builds for popular operating systems on our [Releases page](https://github.com/zarubaf/morty/releases).
+
+### From Sources
 
 Morty is written in Rust. Get the latest stable Rust version:
 ```
