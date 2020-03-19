@@ -4,6 +4,17 @@ _Come on, flip the pickle, Morty, you're not gonna regret it. The payoff is huge
 
 Morty reads SystemVerilog files and pickles them into a single file for easier handling. Optionally it allows to re-name modules with a common prefix or suffix. This allows for easier management of larger projects (they just become a single file). By making them unique they can also depend on different versions of the same dependency without namespace clashes.
 
+## Installation
+
+Morty is written in Rust. Get the latest stable Rust version:
+```
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+```
+Then install `morty` using `cargo`:
+```
+cargo install morty
+```
+
 ## Example Usage
 
 To prefix all modules and packages in `test/package.sv` and `test/package_import_2.sv` and files with `my_little_prefix_` do:
