@@ -6,6 +6,16 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## Unreleased
 
+## 0.3.0 - 2020-03-20
+## Added
+- Re-add minimization and comment-stripping
+
+## Changed
+- Switch to patched `sv-parser` version.
+- Switch to `anyhow` result.
+- Update dependencies.
+- Re-organize uses and mods.
+
 ## 0.2.6 - 2020-03-19
 ## Added
 - Build for different Linux distributions
