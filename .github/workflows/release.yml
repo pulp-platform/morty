@@ -8,7 +8,7 @@ name: Create Release
 
 env:
   # Could, potentially automatically parse
-  # the bin name, but let's do it automatically for now.
+  # the bin name, but let's do it manually for now.
   RELEASE_BIN: morty
 
   # Space separated paths to include in the archive.
@@ -24,11 +24,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        build: [linux, macos, windows]
+        build: [macos, windows]
         include:
-          - build: linux
-            os: ubuntu-latest
-            rust: stable
           - build: macos
             os: macos-latest
             rust: stable
@@ -58,10 +55,6 @@ jobs:
     - name: Create artifact directory
       run: mkdir artifacts
 
-    - name: Create archive for Linux
-      run: 7z a -ttar -so -an ./target/release/${{ env.RELEASE_BIN }} ${{ env.RELEASE_ADDS }} | 7z a -si ./artifacts/${{ env.RELEASE_BIN }}-linux-x86_64.tar.gz
-      if: matrix.os == 'ubuntu-latest'
-
     - name: Create archive for Windows
       run: 7z a -tzip ./artifacts/${{ env.RELEASE_BIN }}-windows-x86_64.zip ./target/release/${{ env.RELEASE_BIN }}.exe ${{ env.RELEASE_ADDS }}
       if: matrix.os == 'windows-latest'
@@ -75,7 +68,7 @@ jobs:
       run: 7z a -tzip ./artifacts/${{ env.RELEASE_BIN }}-osx-x86_64.zip ./target/release/${{ env.RELEASE_BIN }} ${{ env.RELEASE_ADDS }}
       if: matrix.os == 'macos-latest'
 
-    - name: Release
+    - name: Release Native
       uses: softprops/action-gh-release@v1
       if: startsWith(github.ref, 'refs/tags/')
       with:
@@ -83,10 +76,51 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-    # This will double-zip
-    # See - https://github.com/actions/upload-artifact/issues/39
-    - uses: actions/upload-artifact@v1
-      name: Upload archive
+  linux:
+    name: Build release
+    strategy:
+      matrix:
+        container:
+        - 'ubuntu:18.04'
+        - 'centos:7'
+        - 'centos:8' # centos:latest
+    runs-on: ubuntu-latest
+    container: ${{ matrix.container }}
+    steps:
+    - uses: actions/checkout@v1
+
+    - name: Install Environment
+      run: |
+        apt-get update
+        apt-get install -y build-essential curl p7zip-full
+      if: contains( matrix.container, 'ubuntu' )
+
+    - name: Install Environment
+      run: |
+        yum -y groupinstall 'Development Tools'
+        yum install -y epel-release
+        yum install -y p7zip
+      if: contains( matrix.container, 'centos' )
+
+    - name: Install Rust (rustup)
+      run: |
+        curl https://sh.rustup.rs | sh -s -- -y
+        echo "##[add-path]$HOME/.cargo/bin"
+      shell: bash
+
+    - name: Build
+      run: cargo build --verbose --release
+
+    - name: Create artifact directory
+      run: mkdir artifacts
+
+    - name: Create archive for Linux
+      run: 7za a -ttar -so -an ./target/release/${{ env.RELEASE_BIN }} ${{ env.RELEASE_ADDS }} | 7za a -si ./artifacts/${{ env.RELEASE_BIN }}-${{ matrix.container }}-x86_64.tar.gz
+
+    - name: Release Linux
+      uses: softprops/action-gh-release@v1
+      if: startsWith(github.ref, 'refs/tags/')
       with:
-        name: ${{ runner.os }}
-        path: artifacts/
+        files: ./artifacts/*
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
