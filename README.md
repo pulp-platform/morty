@@ -1,3 +1,5 @@
+![CI](https://github.com/zarubaf/morty/workflows/CI/badge.svg?branch=master)
+
 # Morty
 
 _Come on, flip the pickle, Morty, you're not gonna regret it. The payoff is huge. I turned myself into a pickle, Morty!_
