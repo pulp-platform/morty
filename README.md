@@ -18,7 +18,7 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 ```
 Then install `morty` using `cargo`:
 ```
-cargo install morty
+cargo install --git https://github.com/zarubaf/morty.git
 ```
 
 ## Example Usage
