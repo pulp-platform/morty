@@ -136,17 +136,16 @@ fn main() -> Result<(), Error> {
                 .takes_value(true)
                 .number_of_values(1),
         )
-        // Currently not available.
-        // .arg(
-        //     Arg::with_name("minimize")
-        //         .long("minimize")
-        //         .help("Minimize the output"),
-        // )
-        // .arg(
-        //     Arg::with_name("strip_comments")
-        //         .long("strip-comments")
-        //         .help("Strip comments from the output"),
-        // )
+        .arg(
+            Arg::with_name("minimize")
+                .long("minimize")
+                .help("Minimize the output (also strips comments)"),
+        )
+        .arg(
+            Arg::with_name("strip_comments")
+                .long("strip-comments")
+                .help("Strip comments from the output"),
+        )
         .arg(
             Arg::with_name("INPUT")
                 .help("The input files to compile")
@@ -223,8 +222,8 @@ fn main() -> Result<(), Error> {
 
     // Parse the input files.
     let mut buffer = String::new();
-    // let minimize = matches.is_present("minimize");
-    // let strip_comments = matches.is_present("strip_comments");
+    let minimize = matches.is_present("minimize");
+    let strip_comments = matches.is_present("strip_comments") | minimize;
     for bundle in file_list {
         let bundle_include_dirs: Vec<_> = bundle.include_dirs.iter().map(Path::new).collect();
         // Convert the preprocessor defines into the appropriate format which is understood by `sv-parser`
@@ -247,7 +246,13 @@ fn main() -> Result<(), Error> {
         for filename in bundle.files {
             info!("{:?}", filename);
             // Preprocess the verilog files.
-            match preprocess(filename, &bundle_defines, &bundle_include_dirs, false) {
+            match preprocess(
+                filename,
+                &bundle_defines,
+                &bundle_include_dirs,
+                strip_comments,
+                false,
+            ) {
                 Ok(preprocessed) => {
                     buffer.push_str(preprocessed.0.text());
                     // Enforce a new line between files.
@@ -258,15 +263,26 @@ fn main() -> Result<(), Error> {
                     exit(1);
                 }
             }
-            // buffer.push_str(&std::fs::read_to_string(filename).unwrap());
-        }
-
-        // Just preprocess.
-        if matches.is_present("preproc") {
-            println!("{}", buffer);
-            return Ok(());
         }
     }
+
+    let buffer = if minimize {
+        let mut ret_buffer = String::new();
+        for s in buffer.replace("\n", " ").split_ascii_whitespace() {
+            ret_buffer.push_str(s);
+            ret_buffer.push(' ');
+        }
+        ret_buffer
+    } else {
+        buffer
+    };
+
+    // Just preprocess.
+    if matches.is_present("preproc") {
+        println!("{}", buffer);
+        return Ok(());
+    }
+
     info!("Finished reading source files.");
     // Create a temporary file where the pickled sources live.
     let dir = tempdir()?;

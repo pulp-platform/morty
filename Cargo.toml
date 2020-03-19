@@ -24,5 +24,6 @@ colored = "1.9.3"
 tempfile = "3.1.0"
 
 
-# [patch.crates-io]
+[patch.crates-io]
 # sv-parser = {path = "sv-parser/sv-parser"}
+sv-parser = { git = "https://github.com/zarubaf/sv-parser" }
