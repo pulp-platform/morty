@@ -39,7 +39,7 @@ struct Pickle<'a> {
 
 impl<'a> Pickle<'a> {
     /// Register a declaration such as a package or module.
-    fn register_declaration(&mut self, syntax_tree: &SyntaxTree, id: RefNode) -> () {
+    fn register_declaration(&mut self, syntax_tree: &SyntaxTree, id: RefNode) {
         let (module_name, loc) = get_identifier(syntax_tree, id);
         if self.exclude.contains(module_name.as_str()) {
             return;
@@ -52,10 +52,10 @@ impl<'a> Pickle<'a> {
             new_name = format!("{}{}", new_name, suffix);
         }
         debug!("Declaration `{}`: {:?}", module_name, loc);
-        self.rename_table.insert(module_name, new_name.clone());
+        self.rename_table.insert(module_name, new_name);
     }
     /// Register a usage of the identifier.
-    fn register_usage(&mut self, syntax_tree: &SyntaxTree, id: RefNode) -> () {
+    fn register_usage(&mut self, syntax_tree: &SyntaxTree, id: RefNode) {
         let (inst_name, loc) = get_identifier(&syntax_tree, id);
         let new_name = match self.rename_table.get(&inst_name) {
             Some(x) => x,
@@ -169,7 +169,7 @@ fn main() -> Result<(), Error> {
     let defines: HashMap<_, _> = match matches.values_of("def") {
         Some(args) => args
             .map(|x| {
-                let mut iter = x.split("=");
+                let mut iter = x.split('=');
                 (
                     iter.next().unwrap().to_string(),
                     iter.next().map(String::from),
@@ -183,15 +183,11 @@ fn main() -> Result<(), Error> {
     let include_dirs: Vec<_> = matches
         .values_of("inc")
         .into_iter()
-        .flat_map(|args| args)
+        .flatten()
         .map(|x| x.to_string())
         .collect();
 
-    for path in matches
-        .values_of("file_list")
-        .into_iter()
-        .flat_map(|args| args)
-    {
+    for path in matches.values_of("file_list").into_iter().flatten() {
         let file = File::open(path).unwrap();
         let reader = BufReader::new(file);
 
@@ -208,18 +204,18 @@ fn main() -> Result<(), Error> {
         file_list.push(FileBundle {
             include_dirs,
             defines,
-            files: file_names.into_iter().map(String::from).collect(),
+            files: file_names.map(String::from).collect(),
         });
     }
 
     let mut exclude = HashSet::new();
-    exclude.extend(matches.values_of("exclude").into_iter().flat_map(|v| v));
+    exclude.extend(matches.values_of("exclude").into_iter().flatten());
 
     let mut pickle = Pickle {
         // Collect renaming options.
         prefix: matches.value_of("prefix"),
         suffix: matches.value_of("suffix"),
-        exclude: exclude,
+        exclude,
         // Create a rename table.
         rename_table: HashMap::new(),
         replace_table: Vec::new(),
@@ -372,10 +368,10 @@ fn get_identifier(st: &SyntaxTree, node: RefNode) -> (String, Locate) {
     match unwrap_node!(node, SimpleIdentifier, EscapedIdentifier) {
         Some(RefNode::SimpleIdentifier(x)) => {
             // Original string can be got by SyntaxTree::get_str(self, locate: &Locate)
-            return (String::from(st.get_str(&x.nodes.0).unwrap()), x.nodes.0);
+            (String::from(st.get_str(&x.nodes.0).unwrap()), x.nodes.0)
         }
         Some(RefNode::EscapedIdentifier(x)) => {
-            return (String::from(st.get_str(&x.nodes.0).unwrap()), x.nodes.0);
+            (String::from(st.get_str(&x.nodes.0).unwrap()), x.nodes.0)
         }
         _ => panic!("No identifier found."),
     }
