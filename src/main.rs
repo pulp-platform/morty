@@ -20,6 +20,7 @@ use sv_parser::Error as SvParserError;
 use sv_parser::{parse_sv_str, unwrap_node, Define, DefineText, Locate, RefNode, SyntaxTree};
 use tempfile::tempdir;
 
+pub mod doc;
 mod printer;
 
 /// Struct containing information about
@@ -151,6 +152,14 @@ fn main() -> Result<()> {
             Arg::with_name("INPUT")
                 .help("The input files to compile")
                 .multiple(true),
+        )
+        .arg(
+            Arg::with_name("docdir")
+                .short("d")
+                .long("doc")
+                .value_name("OUTDIR")
+                .help("Generate documentation in a directory")
+                .takes_value(true),
         )
         .get_matches();
 
@@ -304,6 +313,13 @@ fn main() -> Result<()> {
         false,
     ) {
         Ok((syntax_tree, _)) => {
+            // Generate documentation and return if requested.
+            if let Some(dir) = matches.value_of("docdir") {
+                info!("Generating documentation in `{}`", dir);
+                let _doc = doc::Doc::new(&syntax_tree);
+                return Ok(());
+            }
+
             // SV parser implements an iterator on the AST.
             for node in &syntax_tree {
                 trace!("{:?}", node);
