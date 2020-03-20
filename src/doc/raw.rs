@@ -60,7 +60,11 @@ impl<'a> RawDoc<'a> {
                     | RefNode::DescriptionPackageItem(..)
                     | RefNode::PackageItem(..)
                     | RefNode::PackageOrGenerateItemDeclaration(..)
-                    | RefNode::DataDeclaration(..) => (),
+                    | RefNode::DataDeclaration(..)
+                    | RefNode::NonPortModuleItem(..)
+                    | RefNode::ModuleOrGenerateItem(..)
+                    | RefNode::ModuleItem(..)
+                    | RefNode::ModuleOrGenerateItemModuleItem(..) => (),
                     _ => {
                         last_comment = LastComment::None;
                         if !comments.is_empty() {
