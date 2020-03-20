@@ -3,23 +3,24 @@
 
 // SPDX-License-Identifier: Apache-2.0
 
+#[macro_use]
+extern crate log;
+
 use anyhow::Result;
 use clap::{App, Arg};
-use log::{debug, info, trace};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::BufReader;
+use std::io::Write;
 use std::path::Path;
 use std::process::exit;
 use sv_parser::preprocess;
 use sv_parser::Error as SvParserError;
-mod printer;
 use sv_parser::{parse_sv_str, unwrap_node, Define, DefineText, Locate, RefNode, SyntaxTree};
-extern crate log;
-extern crate simple_logger;
-use std::io::Write;
 use tempfile::tempdir;
+
+mod printer;
 
 /// Struct containing information about
 /// what should be pickled and how.
