@@ -3,7 +3,7 @@
 
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::Error;
+use anyhow::Result;
 use clap::{App, Arg};
 use log::{debug, info, trace};
 use serde::{Deserialize, Serialize};
@@ -67,7 +67,7 @@ impl<'a> Pickle<'a> {
     }
 }
 
-fn main() -> Result<(), Error> {
+fn main() -> Result<()> {
     let matches = App::new(env!("CARGO_PKG_NAME"))
         .version(clap::crate_version!())
         .author(clap::crate_authors!())
@@ -405,7 +405,7 @@ fn print_parse_error(
     printer: &mut printer::Printer,
     error: SvParserError,
     single: bool,
-) -> Result<(), Error> {
+) -> Result<()> {
     match error {
         SvParserError::Parse(Some((path, pos))) => {
             printer.print_parse_error(&path, pos, single)?;
