@@ -316,7 +316,9 @@ fn main() -> Result<()> {
             // Generate documentation and return if requested.
             if let Some(dir) = matches.value_of("docdir") {
                 info!("Generating documentation in `{}`", dir);
-                let _doc = doc::Doc::new(&syntax_tree);
+                let mut html = doc::Renderer::new(Path::new(dir));
+                let doc = doc::Doc::new(&syntax_tree);
+                html.render(&doc)?;
                 return Ok(());
             }
 

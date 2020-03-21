@@ -7,7 +7,9 @@ use sv_parser::{
     DataType, Identifier, ModuleDeclaration, NetDeclaration, RefNode, SyntaxTree, TypeDeclaration,
 };
 
+mod html;
 mod raw;
+pub use html::*;
 pub use raw::*;
 
 /// Documentation generated for a syntax tree.
