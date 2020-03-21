@@ -2,23 +2,24 @@
 // Copyright 2019 Florian Zaruba
 
 // SPDX-License-Identifier: Apache-2.0
+#![recursion_limit = "256"]
 
 #[macro_use]
 extern crate log;
 
 use anyhow::Result;
 use clap::{App, Arg};
+use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::BufReader;
-use std::io::Write;
 use std::path::Path;
 use std::process::exit;
+use std::sync::{Arc, Mutex};
 use sv_parser::preprocess;
 use sv_parser::Error as SvParserError;
 use sv_parser::{parse_sv_str, unwrap_node, Define, DefineText, Locate, RefNode, SyntaxTree};
-use tempfile::tempdir;
 
 pub mod doc;
 mod printer;
@@ -231,7 +232,9 @@ fn main() -> Result<()> {
     };
 
     // Parse the input files.
-    let mut buffer = String::new();
+    let printer = Arc::new(Mutex::new(printer::Printer::new()));
+    let mut syntax_trees = vec![];
+
     let minimize = matches.is_present("minimize");
     let strip_comments = matches.is_present("strip_comments") | minimize;
     for bundle in file_list {
@@ -252,148 +255,153 @@ fn main() -> Result<()> {
                 )
             })
             .collect();
-        // For each file in the file bundle preprocess and parse it.
-        for filename in bundle.files {
-            info!("{:?}", filename);
-            // Preprocess the verilog files.
-            match preprocess(
-                filename,
-                &bundle_defines,
-                &bundle_include_dirs,
-                strip_comments,
-                false,
-            ) {
-                Ok(preprocessed) => {
-                    buffer.push_str(preprocessed.0.text());
-                    // Enforce a new line between files.
-                    buffer.push_str("\n");
-                }
-                Err(err) => {
-                    eprintln!("{:?}", err);
-                    exit(1);
-                }
-            }
-        }
-    }
 
-    let buffer = if minimize {
-        let mut ret_buffer = String::new();
-        for s in buffer.replace("\n", " ").split_ascii_whitespace() {
-            ret_buffer.push_str(s);
-            ret_buffer.push(' ');
-        }
-        ret_buffer
-    } else {
-        buffer
-    };
+        // For each file in the file bundle preprocess and parse it.
+        syntax_trees.extend(
+            bundle
+                .files
+                .par_iter()
+                .map(|filename| {
+                    info!("{:?}", filename);
+                    // Preprocess the verilog files.
+                    let buffer = match preprocess(
+                        filename,
+                        &bundle_defines,
+                        &bundle_include_dirs,
+                        strip_comments,
+                        false,
+                    ) {
+                        Ok(preprocessed) => String::from(preprocessed.0.text()),
+                        Err(err) => {
+                            eprintln!("{:?}", err);
+                            exit(1);
+                        }
+                    };
+                    // Optionally minimize the pre-processed string.
+                    let mut buffer = if minimize {
+                        let mut ret_buffer = String::new();
+                        for s in buffer.replace("\n", " ").split_ascii_whitespace() {
+                            ret_buffer.push_str(s);
+                            ret_buffer.push(' ');
+                        }
+                        ret_buffer
+                    } else {
+                        buffer
+                    };
+                    print!("{}", buffer);
+                    // Make sure that each file ends with a newline.
+                    if !buffer.ends_with("\n") {
+                        buffer.push('\n');
+                    }
+                    let syntax_tee = match parse_sv_str(
+                        buffer.as_str(),
+                        filename,
+                        &HashMap::new(),
+                        &Vec::<String>::new(),
+                        false,
+                    ) {
+                        Ok((syntax_tree, _)) => syntax_tree,
+                        Err(err) => {
+                            let mut printer = &mut *printer.lock().unwrap();
+                            assert!(print_parse_error(&mut printer, err, false).is_ok());
+                            exit(1);
+                        }
+                    };
+                    (buffer, syntax_tee)
+                })
+                .collect::<Vec<(String, SyntaxTree)>>(),
+        );
+        // .collect_into_vec(&mut syntax_trees);
+    }
 
     // Just preprocess.
     if matches.is_present("preproc") {
-        println!("{}", buffer);
+        for (source, _) in syntax_trees {
+            println!("{:}", source);
+        }
         return Ok(());
     }
 
-    info!("Finished reading source files.");
-    // Create a temporary file where the pickled sources live.
-    let dir = tempdir()?;
-
-    let file_path = dir.path().join("pickle.sv");
-    let mut tmpfile = File::create(&file_path)?;
-
-    writeln!(tmpfile, "{}", buffer)?;
-    let mut printer = printer::Printer::new();
+    info!("Finished reading {} source files.", syntax_trees.len());
 
     info!("Parsing buffer.");
-    // Parse the preprocessed SV file.
-    match parse_sv_str(
-        buffer.as_str(),
-        file_path,
-        &HashMap::new(),
-        &Vec::<String>::new(),
-        false,
-    ) {
-        Ok((syntax_tree, _)) => {
-            // Generate documentation and return if requested.
-            if let Some(dir) = matches.value_of("docdir") {
-                info!("Generating documentation in `{}`", dir);
-                let mut html = doc::Renderer::new(Path::new(dir));
-                let doc = doc::Doc::new(&syntax_tree);
-                html.render(&doc)?;
-                return Ok(());
-            }
 
-            // SV parser implements an iterator on the AST.
-            for node in &syntax_tree {
-                trace!("{:?}", node);
-                match node {
-                    // Module declarations.
-                    RefNode::ModuleDeclarationAnsi(x) => {
-                        // unwrap_node! gets the nearest ModuleIdentifier from x
-                        let id = unwrap_node!(x, SimpleIdentifier).unwrap();
-                        pickle.register_declaration(&syntax_tree, id);
-                    }
-                    RefNode::ModuleDeclarationNonansi(x) => {
-                        let id = unwrap_node!(x, SimpleIdentifier).unwrap();
-                        pickle.register_declaration(&syntax_tree, id);
-                    }
-                    // Interface Declaration.
-                    RefNode::InterfaceDeclaration(x) => {
-                        let id = unwrap_node!(x, SimpleIdentifier).unwrap();
-                        pickle.register_declaration(&syntax_tree, id);
-                    }
-                    // Package declarations.
-                    RefNode::PackageDeclaration(x) => {
-                        let id = unwrap_node!(x, SimpleIdentifier).unwrap();
-                        pickle.register_declaration(&syntax_tree, id);
-                    }
-                    _ => (),
+    for (_, syntax_tree) in &syntax_trees {
+        if let Some(dir) = matches.value_of("docdir") {
+            info!("Generating documentation in `{}`", dir);
+            let mut html = doc::Renderer::new(Path::new(dir));
+            let doc = doc::Doc::new(&syntax_tree);
+            html.render(&doc)?;
+            return Ok(());
+        }
+        for node in syntax_tree {
+            trace!("{:?}", node);
+            match node {
+                // Module declarations.
+                RefNode::ModuleDeclarationAnsi(x) => {
+                    // unwrap_node! gets the nearest ModuleIdentifier from x
+                    let id = unwrap_node!(x, SimpleIdentifier).unwrap();
+                    pickle.register_declaration(&syntax_tree, id);
                 }
-            }
-            // Iterate again and check for usage
-            for node in &syntax_tree {
-                match node {
-                    // Instantiations, end-labels.
-                    RefNode::ModuleIdentifier(x) => {
-                        let id = unwrap_node!(x, SimpleIdentifier).unwrap();
-                        pickle.register_usage(&syntax_tree, id);
-                    }
-                    // Interface identifier.
-                    RefNode::InterfaceIdentifier(x) => {
-                        let id = unwrap_node!(x, SimpleIdentifier).unwrap();
-                        pickle.register_usage(&syntax_tree, id);
-                    }
-                    // Package Qualifier (i.e., explicit package constants).
-                    RefNode::ClassScope(x) => {
-                        let id = unwrap_node!(x, SimpleIdentifier).unwrap();
-                        pickle.register_usage(&syntax_tree, id);
-                    }
-                    // Package Import.
-                    RefNode::PackageIdentifier(x) => {
-                        let id = unwrap_node!(x, SimpleIdentifier).unwrap();
-                        pickle.register_usage(&syntax_tree, id);
-                    }
-                    _ => (),
+                RefNode::ModuleDeclarationNonansi(x) => {
+                    let id = unwrap_node!(x, SimpleIdentifier).unwrap();
+                    pickle.register_declaration(&syntax_tree, id);
                 }
+                // Interface Declaration.
+                RefNode::InterfaceDeclaration(x) => {
+                    let id = unwrap_node!(x, SimpleIdentifier).unwrap();
+                    pickle.register_declaration(&syntax_tree, id);
+                }
+                // Package declarations.
+                RefNode::PackageDeclaration(x) => {
+                    let id = unwrap_node!(x, SimpleIdentifier).unwrap();
+                    pickle.register_declaration(&syntax_tree, id);
+                }
+                _ => (),
             }
         }
-        Err(err) => {
-            print_parse_error(&mut printer, err, false)?;
-            exit(1);
+    }
+    for (source, syntax_tree) in &syntax_trees {
+        // For each file, start with a clean replacement table.
+        pickle.replace_table.clear();
+        // Iterate again and check for usage
+        for node in syntax_tree {
+            match node {
+                // Instantiations, end-labels.
+                RefNode::ModuleIdentifier(x) => {
+                    let id = unwrap_node!(x, SimpleIdentifier).unwrap();
+                    pickle.register_usage(&syntax_tree, id);
+                }
+                // Interface identifier.
+                RefNode::InterfaceIdentifier(x) => {
+                    let id = unwrap_node!(x, SimpleIdentifier).unwrap();
+                    pickle.register_usage(&syntax_tree, id);
+                }
+                // Package Qualifier (i.e., explicit package constants).
+                RefNode::ClassScope(x) => {
+                    let id = unwrap_node!(x, SimpleIdentifier).unwrap();
+                    pickle.register_usage(&syntax_tree, id);
+                }
+                // Package Import.
+                RefNode::PackageIdentifier(x) => {
+                    let id = unwrap_node!(x, SimpleIdentifier).unwrap();
+                    pickle.register_usage(&syntax_tree, id);
+                }
+                _ => (),
+            }
         }
+        // Replace according to `replace_table`.
+        // Apply the replacements.
+        debug!("{:?}", pickle.replace_table);
+        let mut pos = 0;
+        for (offset, len, repl) in pickle.replace_table.iter() {
+            trace!("Replacing: {},{}, {}", offset, len, repl);
+            print!("{}", &source[pos..*offset]);
+            print!("{}", repl);
+            pos = offset + len;
+        }
+        print!("{}", &source[pos..]);
     }
-
-    // Replace according to `replace_table`.
-    // Apply the replacements.
-    pickle.replace_table.sort();
-    debug!("{:?}", pickle.replace_table);
-    let mut pos = 0;
-    for (offset, len, repl) in pickle.replace_table.iter() {
-        trace!("Replacing: {},{}, {}", offset, len, repl);
-        print!("{}", &buffer[pos..*offset]);
-        print!("{}", repl);
-        pos = offset + len;
-    }
-    print!("{}", &buffer[pos..]);
 
     Ok(())
 }
