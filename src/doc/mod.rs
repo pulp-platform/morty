@@ -3,7 +3,9 @@
 //! This module implements AST analysis, data preparation, and documentation
 //! generation.
 
-use sv_parser::{DataType, Identifier, ModuleDeclaration, RefNode, SyntaxTree, TypeDeclaration};
+use sv_parser::{
+    DataType, Identifier, ModuleDeclaration, NetDeclaration, RefNode, SyntaxTree, TypeDeclaration,
+};
 
 mod raw;
 pub use raw::*;
@@ -29,9 +31,11 @@ impl<'a> Doc<'a> {
 
 #[derive(Default, Debug)]
 pub struct Context {
-    params: Vec<()>,
+    params: Vec<ParamItem>,
+    ports: Vec<PortItem>,
     types: Vec<TypeItem>,
     modules: Vec<ModuleItem>,
+    vars: Vec<VarItem>,
 }
 
 impl Context {
@@ -56,7 +60,51 @@ impl Context {
                 }
                 _ => return,
             }),
-            _ => (),
+            RefNode::NetDeclaration(decl) => match decl {
+                NetDeclaration::NetTypeIdentifier(decl) => {
+                    for decl_assign in decl.nodes.2.nodes.0.contents() {
+                        self.vars.push(VarItem::from(
+                            raw,
+                            scope,
+                            decl.nodes
+                                .0
+                                .into_iter()
+                                .chain(decl.nodes.1.iter().flat_map(|n| n.into_iter())),
+                            decl_assign,
+                        ));
+                    }
+                }
+                NetDeclaration::NetType(decl) => {
+                    for decl_assign in decl.nodes.5.nodes.0.contents() {
+                        self.vars.push(VarItem::from(
+                            raw,
+                            scope,
+                            decl.nodes
+                                .0
+                                .into_iter()
+                                .chain(decl.nodes.1.iter().flat_map(|n| n.into_iter()))
+                                .chain(decl.nodes.2.iter().flat_map(|n| n.into_iter()))
+                                .chain(decl.nodes.3.into_iter())
+                                .chain(decl.nodes.4.iter().flat_map(|n| n.into_iter())),
+                            decl_assign,
+                        ));
+                    }
+                }
+                _ => return,
+            },
+            RefNode::AnsiPortDeclaration(sv_parser::AnsiPortDeclaration::Net(decl)) => {
+                self.ports
+                    .push(PortItem::from(raw, scope, &decl.nodes.1.nodes.0));
+            }
+            RefNode::ParameterDeclaration(sv_parser::ParameterDeclaration::Param(decl)) => {
+                for assign in decl.nodes.2.nodes.0.contents() {
+                    self.params.push(ParamItem::from(raw, scope, assign));
+                }
+            }
+            _ => {
+                warn!("Discarding raw doc for {}", node);
+                trace!("{:?}", node);
+            }
         }
     }
 
@@ -94,6 +142,42 @@ impl ModuleItem {
     }
 }
 
+/// Documentation for a parameter.
+#[derive(Debug)]
+pub struct ParamItem {
+    /// Documentation text.
+    pub doc: String,
+    /// Parameter name.
+    pub name: String,
+}
+
+impl ParamItem {
+    fn from<'a>(raw: &RawDoc, scope: &Scope, assign: &sv_parser::ParamAssignment) -> Self {
+        Self {
+            doc: parse_docs(raw, &scope.comments),
+            name: parse_ident(raw, &assign.nodes.0.nodes.0),
+        }
+    }
+}
+
+/// Documentation for a port.
+#[derive(Debug)]
+pub struct PortItem {
+    /// Documentation text.
+    pub doc: String,
+    /// Port name.
+    pub name: String,
+}
+
+impl PortItem {
+    fn from<'a>(raw: &RawDoc, scope: &Scope, name: &Identifier) -> Self {
+        Self {
+            doc: parse_docs(raw, &scope.comments),
+            name: parse_ident(raw, name),
+        }
+    }
+}
+
 /// Documentation for a type.
 #[derive(Debug)]
 pub struct TypeItem {
@@ -111,6 +195,37 @@ impl TypeItem {
             doc: parse_docs(raw, &scope.comments),
             name: parse_ident(raw, name),
             ty: raw.ast.get_str(ty).unwrap().trim().to_string(),
+        }
+    }
+}
+
+/// Documentation for a variable.
+#[derive(Debug)]
+pub struct VarItem {
+    /// Documentation text.
+    pub doc: String,
+    /// Variable name.
+    pub name: String,
+    /// Variable type.
+    pub ty: String,
+}
+
+impl VarItem {
+    fn from<'a>(
+        raw: &RawDoc,
+        scope: &Scope,
+        ty_nodes: impl Iterator<Item = RefNode<'a>>,
+        decl_assign: &sv_parser::NetDeclAssignment,
+    ) -> Self {
+        Self {
+            doc: parse_docs(raw, &scope.comments),
+            name: parse_ident(raw, &decl_assign.nodes.0.nodes.0),
+            ty: raw
+                .ast
+                .get_str(ty_nodes.collect::<Vec<_>>())
+                .unwrap()
+                .trim()
+                .to_string(),
         }
     }
 }
