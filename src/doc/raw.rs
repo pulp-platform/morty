@@ -49,7 +49,11 @@ impl<'a> RawDoc<'a> {
                             comments.push(&s[3..]);
                         }
                     }
-                    RefNode::TypeDeclaration(..) | RefNode::ModuleDeclaration(..) => {
+                    RefNode::TypeDeclaration(..)
+                    | RefNode::NetDeclaration(..)
+                    | RefNode::ParameterDeclaration(..)
+                    | RefNode::AnsiPortDeclaration(..)
+                    | RefNode::ModuleDeclaration(..) => {
                         last_comment = LastComment::None;
                         stack.push(Scope::new(node.clone(), std::mem::take(&mut comments)));
                     }
@@ -63,15 +67,18 @@ impl<'a> RawDoc<'a> {
                     | RefNode::DataDeclaration(..)
                     | RefNode::NonPortModuleItem(..)
                     | RefNode::ModuleOrGenerateItem(..)
+                    | RefNode::ModuleOrGenerateItemDeclaration(..)
                     | RefNode::ModuleItem(..)
+                    | RefNode::ParameterPortDeclaration(..)
+                    | RefNode::ModuleCommonItem(..)
                     | RefNode::ModuleOrGenerateItemModuleItem(..) => (),
                     _ => {
                         last_comment = LastComment::None;
                         if !comments.is_empty() {
-                            debug!("Flushing unused comments");
+                            debug!("Discarding comments: {:#?}", comments);
+                            trace!("Discarded due to {:?}", node);
                             comments.clear();
                         }
-                        trace!("{:?}", node);
                     }
                 },
                 NodeEvent::Leave(node) => {
@@ -86,7 +93,6 @@ impl<'a> RawDoc<'a> {
         }
         assert_eq!(stack.len(), 1);
         let root = stack.into_iter().next().unwrap();
-        debug!("Analyzed {:#?}", root);
 
         Self { ast, root }
     }
