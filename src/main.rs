@@ -259,7 +259,7 @@ fn main() -> Result<()> {
         // Use a neat trick of `collect` here, which allows you to collect a
         // `Result<T>` iterator into a `Result<Vec<T>>`, i.e. bubbling up the
         // error.
-        let v: Result<Vec<(String, SyntaxTree)>> = bundle
+        let v: Result<Vec<ParsedFile>> = bundle
             .files
             .par_iter()
             .map(|filename| -> Result<_> {
@@ -310,7 +310,11 @@ fn main() -> Result<()> {
                 })?
                 .0;
 
-                Ok((buffer, syntax_tee))
+                Ok(ParsedFile {
+                    path: filename.clone(),
+                    source: buffer,
+                    ast: syntax_tee,
+                })
             })
             .collect();
         syntax_trees.extend(v?);
@@ -318,8 +322,9 @@ fn main() -> Result<()> {
 
     // Just preprocess.
     if matches.is_present("preproc") {
-        for (source, _) in syntax_trees {
-            println!("{:}", source);
+        for pf in syntax_trees {
+            eprintln!("{}:", pf.path);
+            println!("{:}", pf.source);
         }
         return Ok(());
     }
@@ -328,66 +333,66 @@ fn main() -> Result<()> {
 
     info!("Parsing buffer.");
 
-    for (_, syntax_tree) in &syntax_trees {
+    for pf in &syntax_trees {
         if let Some(dir) = matches.value_of("docdir") {
             info!("Generating documentation in `{}`", dir);
             let mut html = doc::Renderer::new(Path::new(dir));
-            let doc = doc::Doc::new(&syntax_tree);
+            let doc = doc::Doc::new(&pf.ast);
             html.render(&doc)?;
             return Ok(());
         }
-        for node in syntax_tree {
+        for node in &pf.ast {
             trace!("{:?}", node);
             match node {
                 // Module declarations.
                 RefNode::ModuleDeclarationAnsi(x) => {
                     // unwrap_node! gets the nearest ModuleIdentifier from x
                     let id = unwrap_node!(x, SimpleIdentifier).unwrap();
-                    pickle.register_declaration(&syntax_tree, id);
+                    pickle.register_declaration(&pf.ast, id);
                 }
                 RefNode::ModuleDeclarationNonansi(x) => {
                     let id = unwrap_node!(x, SimpleIdentifier).unwrap();
-                    pickle.register_declaration(&syntax_tree, id);
+                    pickle.register_declaration(&pf.ast, id);
                 }
                 // Interface Declaration.
                 RefNode::InterfaceDeclaration(x) => {
                     let id = unwrap_node!(x, SimpleIdentifier).unwrap();
-                    pickle.register_declaration(&syntax_tree, id);
+                    pickle.register_declaration(&pf.ast, id);
                 }
                 // Package declarations.
                 RefNode::PackageDeclaration(x) => {
                     let id = unwrap_node!(x, SimpleIdentifier).unwrap();
-                    pickle.register_declaration(&syntax_tree, id);
+                    pickle.register_declaration(&pf.ast, id);
                 }
                 _ => (),
             }
         }
     }
-    for (source, syntax_tree) in &syntax_trees {
+    for pf in &syntax_trees {
         // For each file, start with a clean replacement table.
         pickle.replace_table.clear();
         // Iterate again and check for usage
-        for node in syntax_tree {
+        for node in &pf.ast {
             match node {
                 // Instantiations, end-labels.
                 RefNode::ModuleIdentifier(x) => {
                     let id = unwrap_node!(x, SimpleIdentifier).unwrap();
-                    pickle.register_usage(&syntax_tree, id);
+                    pickle.register_usage(&pf.ast, id);
                 }
                 // Interface identifier.
                 RefNode::InterfaceIdentifier(x) => {
                     let id = unwrap_node!(x, SimpleIdentifier).unwrap();
-                    pickle.register_usage(&syntax_tree, id);
+                    pickle.register_usage(&pf.ast, id);
                 }
                 // Package Qualifier (i.e., explicit package constants).
                 RefNode::ClassScope(x) => {
                     let id = unwrap_node!(x, SimpleIdentifier).unwrap();
-                    pickle.register_usage(&syntax_tree, id);
+                    pickle.register_usage(&pf.ast, id);
                 }
                 // Package Import.
                 RefNode::PackageIdentifier(x) => {
                     let id = unwrap_node!(x, SimpleIdentifier).unwrap();
-                    pickle.register_usage(&syntax_tree, id);
+                    pickle.register_usage(&pf.ast, id);
                 }
                 _ => (),
             }
@@ -398,11 +403,11 @@ fn main() -> Result<()> {
         let mut pos = 0;
         for (offset, len, repl) in pickle.replace_table.iter() {
             trace!("Replacing: {},{}, {}", offset, len, repl);
-            print!("{}", &source[pos..*offset]);
+            print!("{}", &pf.source[pos..*offset]);
             print!("{}", repl);
             pos = offset + len;
         }
-        print!("{}", &source[pos..]);
+        print!("{}", &pf.source[pos..]);
     }
 
     Ok(())
@@ -427,6 +432,16 @@ struct FileBundle {
     include_dirs: Vec<String>,
     defines: HashMap<String, Option<String>>,
     files: Vec<String>,
+}
+
+/// A parsed input file.
+pub struct ParsedFile {
+    /// The path to the file.
+    pub path: String,
+    /// The contents of the file.
+    pub source: String,
+    /// The parsed AST of the file.
+    pub ast: SyntaxTree,
 }
 
 #[cfg_attr(tarpaulin, skip)]
