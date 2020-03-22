@@ -3,10 +3,12 @@
 use super::*;
 use anyhow::{Context as _, Result};
 use std::{
+    fs::write,
     fs::File,
     io::Write,
     path::{Path, PathBuf},
 };
+mod static_files;
 
 /// A HTML renderer.
 pub struct Renderer<'a> {
@@ -19,6 +21,19 @@ impl<'a> Renderer<'a> {
         Self { dir }
     }
 
+    pub fn render_header(&mut self, out: &mut impl Write) -> Result<()> {
+        writeln!(out, "<html>")?;
+        writeln!(
+            out,
+            "<link rel=\"stylesheet\" type=\"text/css\" href=\"static/rustdoc.css\">"
+        )?;
+        writeln!(
+            out,
+            "<link rel=\"stylesheet\" type=\"text/css\" href=\"static/light.css\">"
+        )?;
+        Ok(())
+    }
+
     /// Render some documentation.
     pub fn render(&mut self, doc: &Doc) -> Result<()> {
         debug!("Render documentation");
@@ -26,6 +41,43 @@ impl<'a> Renderer<'a> {
         // Create the documentation directory.
         std::fs::create_dir_all(self.dir)
             .with_context(|| format!("Failed to create doc directory `{}`", self.dir.display()))?;
+
+        let mut static_path = self.dir.join("static");
+        std::fs::create_dir_all(&mut static_path)
+            .with_context(|| format!("Failed to create doc directory `{}`", self.dir.display()))?;
+
+        write(static_path.join("light.css"), static_files::LIGHT)?;
+        write(static_path.join("rustdoc.css"), static_files::RUSTDOC_CSS)?;
+        write(
+            static_path.join("SourceSerifPro-Regular.ttf.woff"),
+            static_files::source_serif_pro::REGULAR,
+        )?;
+        write(
+            static_path.join("SourceSerifPro-Bold.ttf.woff"),
+            static_files::source_serif_pro::BOLD,
+        )?;
+        write(
+            static_path.join("SourceSerifPro-It.ttf.woff"),
+            static_files::source_serif_pro::ITALIC,
+        )?;
+
+        write(
+            static_path.join("SourceCodePro-Regular.woff"),
+            static_files::source_code_pro::REGULAR,
+        )?;
+        write(
+            static_path.join("SourceCodePro-Semibold.woff"),
+            static_files::source_code_pro::SEMIBOLD,
+        )?;
+
+        write(
+            static_path.join("FiraSans-Regular.woff"),
+            static_files::fira_sans::REGULAR,
+        )?;
+        write(
+            static_path.join("FiraSans-Medium.woff"),
+            static_files::fira_sans::MEDIUM,
+        )?;
 
         // Render the modules.
         for i in &doc.data.modules {
@@ -45,12 +97,14 @@ impl<'a> Renderer<'a> {
         debug!("Render index into `{}`", path.display());
         let mut out = File::create(path)?;
 
-        write!(out, "<html>\n")?;
+        self.render_header(&mut out)?;
         write!(out, "<body>\n")?;
-        write!(out, "<h1>Documentation</h1>\n")?;
+        write!(out, "<section id=\"main\" class=\"content\">")?;
+        write!(out, "<h1 class=\"fqn\">Documentation</h1>\n")?;
 
         self.render_contents(&doc.data, &mut out)?;
 
+        write!(out, "</section>\n")?;
         write!(out, "</body>\n")?;
         write!(out, "</html>\n")?;
 
@@ -62,13 +116,22 @@ impl<'a> Renderer<'a> {
         debug!("Render module `{}` into `{}`", item.name, path.display());
         let mut out = File::create(path)?;
 
-        write!(out, "<html>\n")?;
+        self.render_header(&mut out)?;
         write!(out, "<body>\n")?;
-        write!(out, "<h1>Module <em>{}</em></h1>\n", item.name)?;
+        write!(out, "<section id=\"main\" class=\"content\">")?;
+        write!(
+            out,
+            "<h1 class=\"fqn\">Module <em>{}</em></h1>\n",
+            item.name
+        )?;
 
+        write!(out, "<div class=\"docblock\">\n")?;
         self.render_doc(&item.doc, &mut out)?;
+        write!(out, "</div>\n")?;
+
         self.render_contents(&item.content, &mut out)?;
 
+        write!(out, "</section>\n")?;
         write!(out, "</body>\n")?;
         write!(out, "</html>\n")?;
 
@@ -80,13 +143,19 @@ impl<'a> Renderer<'a> {
         debug!("Render type `{}` into `{}`", item.name, path.display());
         let mut out = File::create(path)?;
 
-        write!(out, "<html>\n")?;
+        self.render_header(&mut out)?;
         write!(out, "<body>\n")?;
-        write!(out, "<h1>Typedef <em>{}</em></h1>\n", item.name)?;
+        write!(out, "<section id=\"main\" class=\"content\">")?;
+        write!(
+            out,
+            "<h1 class=\"fqn\">Typedef <em>{}</em></h1>\n",
+            item.name
+        )?;
 
         write!(out, "<pre>typedef {} {};</pre>\n", item.ty, item.name)?;
         self.render_doc(&item.doc, &mut out)?;
 
+        write!(out, "</section>\n")?;
         write!(out, "</body>\n")?;
         write!(out, "</html>\n")?;
 
@@ -112,15 +181,27 @@ impl<'a> Renderer<'a> {
         if !cx.params.is_empty() {
             write!(out, "<h2>Parameters</h2>\n")?;
             for i in &cx.params {
-                write!(out, "<h3>{}</h3>", i.name)?;
+                write!(
+                    out,
+                    "<h3 id=\"impl\" class=\"impl\"><code class=\"in-band\">{}</code></h3>",
+                    i.name
+                )?;
+                write!(out, "<div class=\"docblock\"\n>")?;
                 self.render_doc(&i.doc, out)?;
+                write!(out, "</div>")?;
             }
         }
         if !cx.ports.is_empty() {
             write!(out, "<h2>Ports</h2>\n")?;
             for i in &cx.ports {
-                write!(out, "<h3>{}</h3>", i.name)?;
+                write!(
+                    out,
+                    "<h3 id=\"impl\" class=\"impl\"><code class=\"in-band\">{}</code></h3>",
+                    i.name
+                )?;
+                write!(out, "<div class=\"docblock\"\n>")?;
                 self.render_doc(&i.doc, out)?;
+                write!(out, "</div>")?;
             }
         }
         if !cx.types.is_empty() {
@@ -142,8 +223,14 @@ impl<'a> Renderer<'a> {
         if !cx.vars.is_empty() {
             write!(out, "<h2>Signals</h2>\n")?;
             for i in &cx.vars {
-                write!(out, "<h3>{}: {}</h3>", i.name, i.ty)?;
+                write!(
+                    out,
+                    "<h3 id=\"impl\" class=\"impl\"><code class=\"in-band\">{}: {}</code></h3>",
+                    i.name, i.ty
+                )?;
+                write!(out, "<div class=\"docblock\"\n>")?;
                 self.render_doc(&i.doc, out)?;
+                write!(out, "</div>")?;
             }
         }
         Ok(())
