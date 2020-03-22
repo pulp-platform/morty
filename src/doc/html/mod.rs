@@ -42,6 +42,7 @@ impl<'a> Renderer<'a> {
         std::fs::create_dir_all(self.dir)
             .with_context(|| format!("Failed to create doc directory `{}`", self.dir.display()))?;
 
+        // Write the static files.
         let mut static_path = self.dir.join("static");
         std::fs::create_dir_all(&mut static_path)
             .with_context(|| format!("Failed to create doc directory `{}`", self.dir.display()))?;
@@ -79,12 +80,6 @@ impl<'a> Renderer<'a> {
             static_files::fira_sans::MEDIUM,
         )?;
 
-        // Render the modules.
-        for i in &doc.data.modules {
-            self.render_module(i)
-                .with_context(|| format!("Failed ro render module `{}`", i.name))?;
-        }
-
         // Render the index.
         self.render_index(doc)
             .with_context(|| "Failed to render index")?;
@@ -103,6 +98,33 @@ impl<'a> Renderer<'a> {
         write!(out, "<h1 class=\"fqn\">Documentation</h1>\n")?;
 
         self.render_contents(&doc.data, &mut out)?;
+
+        write!(out, "</section>\n")?;
+        write!(out, "</body>\n")?;
+        write!(out, "</html>\n")?;
+
+        Ok(())
+    }
+
+    fn render_package(&mut self, item: &PackageItem) -> Result<()> {
+        let path = self.path_to_package(&item.name);
+        debug!("Render package `{}` into `{}`", item.name, path.display());
+        let mut out = File::create(path)?;
+
+        self.render_header(&mut out)?;
+        write!(out, "<body>\n")?;
+        write!(out, "<section id=\"main\" class=\"content\">")?;
+        write!(
+            out,
+            "<h1 class=\"fqn\">Package <a class=\"package\">{}</a></h1>\n",
+            item.name
+        )?;
+
+        write!(out, "<div class=\"docblock\">\n")?;
+        self.render_doc(&item.doc, &mut out)?;
+        write!(out, "</div>\n")?;
+
+        self.render_contents(&item.content, &mut out)?;
 
         write!(out, "</section>\n")?;
         write!(out, "</body>\n")?;
@@ -163,6 +185,23 @@ impl<'a> Renderer<'a> {
     }
 
     fn render_contents(&mut self, cx: &Context, out: &mut impl Write) -> Result<()> {
+        if !cx.packages.is_empty() {
+            write!(out, "<h2>Packages</h2>\n")?;
+            write!(out, "<table>\n")?;
+            for i in &cx.packages {
+                write!(
+                    out,
+                    "<tr><td><a class=\"package\" href=\"{}\">{}</a></td><td>",
+                    self.subpath_to_package(&i.name),
+                    i.name
+                )?;
+                self.render_headline_doc(&i.doc, out)?;
+                write!(out, "</td></tr>")?;
+                self.render_package(i)
+                    .with_context(|| format!("Failed ro render package `{}`", i.name))?;
+            }
+            write!(out, "</table>\n")?;
+        }
         if !cx.modules.is_empty() {
             write!(out, "<h2>Modules</h2>\n")?;
             write!(out, "<table>\n")?;
@@ -175,6 +214,8 @@ impl<'a> Renderer<'a> {
                 )?;
                 self.render_headline_doc(&i.doc, out)?;
                 write!(out, "</td></tr>")?;
+                self.render_module(i)
+                    .with_context(|| format!("Failed ro render module `{}`", i.name))?;
             }
             write!(out, "</table>\n")?;
         }
@@ -216,7 +257,8 @@ impl<'a> Renderer<'a> {
                 )?;
                 self.render_headline_doc(&i.doc, out)?;
                 write!(out, "</td></tr>")?;
-                self.render_type(i)?;
+                self.render_type(i)
+                    .with_context(|| format!("Failed ro render type `{}`", i.name))?;
             }
             write!(out, "</table>\n")?;
         }
@@ -251,12 +293,20 @@ impl<'a> Renderer<'a> {
         Ok(())
     }
 
+    fn subpath_to_package(&self, name: &str) -> String {
+        format!("package.{}.html", name)
+    }
+
     fn subpath_to_module(&self, name: &str) -> String {
         format!("module.{}.html", name)
     }
 
     fn subpath_to_type(&self, name: &str) -> String {
         format!("type.{}.html", name)
+    }
+
+    fn path_to_package(&self, name: &str) -> PathBuf {
+        self.dir.join(self.subpath_to_package(name))
     }
 
     fn path_to_module(&self, name: &str) -> PathBuf {

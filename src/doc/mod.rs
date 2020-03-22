@@ -46,6 +46,7 @@ pub struct Context {
     ports: Vec<PortItem>,
     types: Vec<TypeItem>,
     modules: Vec<ModuleItem>,
+    packages: Vec<PackageItem>,
     vars: Vec<VarItem>,
 }
 
@@ -56,6 +57,10 @@ impl Context {
             None => return,
         };
         match node {
+            RefNode::PackageDeclaration(decl) => {
+                self.packages
+                    .push(PackageItem::from(raw, scope, &(decl.nodes.3).nodes.0))
+            }
             RefNode::ModuleDeclaration(decl) => self.modules.push(match decl {
                 sv::ModuleDeclaration::Nonansi(decl) => {
                     ModuleItem::from(raw, scope, &(decl.nodes.0).nodes.3.nodes.0)
@@ -131,6 +136,29 @@ impl Context {
     ) {
         for scope in scopes {
             self.analyze_scope(raw, scope);
+        }
+    }
+}
+
+/// Documentation for a package.
+#[derive(Debug)]
+pub struct PackageItem {
+    /// Documentation text.
+    pub doc: String,
+    /// Package name.
+    pub name: String,
+    /// The package contents.
+    pub content: Context,
+}
+
+impl PackageItem {
+    fn from(raw: &RawDoc, scope: &Scope, name: &sv::Identifier) -> Self {
+        let mut content = Context::default();
+        content.analyze_scopes(raw, &scope.children);
+        Self {
+            doc: parse_docs(raw, &scope.comments),
+            name: parse_ident(raw, name),
+            content,
         }
     }
 }

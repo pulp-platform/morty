@@ -54,7 +54,8 @@ impl<'a> RawDoc<'a> {
                     | RefNode::ParameterDeclaration(..)
                     | RefNode::LocalParameterDeclaration(..)
                     | RefNode::AnsiPortDeclaration(..)
-                    | RefNode::ModuleDeclaration(..) => {
+                    | RefNode::ModuleDeclaration(..)
+                    | RefNode::PackageDeclaration(..) => {
                         last_comment = LastComment::None;
                         stack.push(Scope::new(node.clone(), std::mem::take(&mut comments)));
                     }

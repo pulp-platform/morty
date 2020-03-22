@@ -41,3 +41,17 @@ module fifo #(
     /// Magic nets.
     word_t magic;
 endmodule
+
+/// A helper package for the fifo.
+///
+/// This is pretty awesome, you may want to consider using this.
+package fifo_pkg;
+    /// Well, you've got to start somewhere.
+    typedef logic [1023:0][3:0] too_much_data_t;
+
+    /// Parametrization is very important.
+    parameter int Length = 123;
+
+    /// Local communities!
+    localparam int Width = 42;
+endpackage
