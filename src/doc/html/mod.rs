@@ -121,7 +121,7 @@ impl<'a> Renderer<'a> {
         write!(out, "<section id=\"main\" class=\"content\">")?;
         write!(
             out,
-            "<h1 class=\"fqn\">Module <em>{}</em></h1>\n",
+            "<h1 class=\"fqn\">Module <a class=\"module\">{}</a></h1>\n",
             item.name
         )?;
 
@@ -148,7 +148,7 @@ impl<'a> Renderer<'a> {
         write!(out, "<section id=\"main\" class=\"content\">")?;
         write!(
             out,
-            "<h1 class=\"fqn\">Typedef <em>{}</em></h1>\n",
+            "<h1 class=\"fqn\">Typedef <a class=\"type\">{}</a></h1>\n",
             item.name
         )?;
 
@@ -169,7 +169,7 @@ impl<'a> Renderer<'a> {
             for i in &cx.modules {
                 write!(
                     out,
-                    "<tr><td><a href=\"{}\">{}</a></td><td>",
+                    "<tr><td><a class=\"module\" href=\"{}\">{}</a></td><td>",
                     self.subpath_to_module(&i.name),
                     i.name
                 )?;
@@ -210,7 +210,7 @@ impl<'a> Renderer<'a> {
             for i in &cx.types {
                 write!(
                     out,
-                    "<tr><td><a href=\"{}\">{}</a></td><td>",
+                    "<tr><td><a class=\"type\" href=\"{}\">{}</a></td><td>",
                     self.subpath_to_type(&i.name),
                     i.name
                 )?;
