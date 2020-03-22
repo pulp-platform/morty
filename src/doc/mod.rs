@@ -3,9 +3,8 @@
 //! This module implements AST analysis, data preparation, and documentation
 //! generation.
 
-use sv_parser::{
-    DataType, Identifier, ModuleDeclaration, NetDeclaration, RefNode, SyntaxTree, TypeDeclaration,
-};
+use crate::ParsedFile;
+use sv_parser::{self as sv, RefNode};
 
 mod html;
 mod raw;
@@ -15,18 +14,28 @@ pub use raw::*;
 /// Documentation generated for a syntax tree.
 pub struct Doc<'a> {
     /// The raw documentation.
-    pub raw: RawDoc<'a>,
+    pub raw: Vec<(&'a ParsedFile, RawDoc<'a>)>,
     /// The documentation items.
     pub data: Context,
 }
 
 impl<'a> Doc<'a> {
     /// Generate documentation from an AST.
-    pub fn new(ast: &'a SyntaxTree) -> Self {
-        let raw = RawDoc::new(ast);
+    pub fn new(files: impl IntoIterator<Item = &'a ParsedFile>) -> Self {
+        // Process the files into raw documentation.
+        let raw: Vec<_> = files
+            .into_iter()
+            .map(|pf| (pf, RawDoc::new(&pf.ast)))
+            .collect();
+
+        // Analyze the files into proper documentation nodes.
         let mut data = Context::default();
-        data.analyze_scopes(&raw, &raw.root.children);
+        for (_pf, raw) in &raw {
+            data.analyze_scopes(&raw, &raw.root.children);
+        }
         debug!("{:#?}", data);
+
+        // Package up.
         Self { raw, data }
     }
 }
@@ -48,22 +57,22 @@ impl Context {
         };
         match node {
             RefNode::ModuleDeclaration(decl) => self.modules.push(match decl {
-                ModuleDeclaration::Nonansi(decl) => {
+                sv::ModuleDeclaration::Nonansi(decl) => {
                     ModuleItem::from(raw, scope, &(decl.nodes.0).nodes.3.nodes.0)
                 }
-                ModuleDeclaration::Ansi(decl) => {
+                sv::ModuleDeclaration::Ansi(decl) => {
                     ModuleItem::from(raw, scope, &(decl.nodes.0).nodes.3.nodes.0)
                 }
                 _ => return,
             }),
             RefNode::TypeDeclaration(decl) => self.types.push(match decl {
-                TypeDeclaration::DataType(decl) => {
+                sv::TypeDeclaration::DataType(decl) => {
                     TypeItem::from(raw, scope, &(decl.nodes.2).nodes.0, &decl.nodes.1)
                 }
                 _ => return,
             }),
             RefNode::NetDeclaration(decl) => match decl {
-                NetDeclaration::NetTypeIdentifier(decl) => {
+                sv::NetDeclaration::NetTypeIdentifier(decl) => {
                     for decl_assign in decl.nodes.2.nodes.0.contents() {
                         self.vars.push(VarItem::from(
                             raw,
@@ -76,7 +85,7 @@ impl Context {
                         ));
                     }
                 }
-                NetDeclaration::NetType(decl) => {
+                sv::NetDeclaration::NetType(decl) => {
                     for decl_assign in decl.nodes.5.nodes.0.contents() {
                         self.vars.push(VarItem::from(
                             raw,
@@ -94,11 +103,11 @@ impl Context {
                 }
                 _ => return,
             },
-            RefNode::AnsiPortDeclaration(sv_parser::AnsiPortDeclaration::Net(decl)) => {
+            RefNode::AnsiPortDeclaration(sv::AnsiPortDeclaration::Net(decl)) => {
                 self.ports
                     .push(PortItem::from(raw, scope, &decl.nodes.1.nodes.0));
             }
-            RefNode::ParameterDeclaration(sv_parser::ParameterDeclaration::Param(decl)) => {
+            RefNode::ParameterDeclaration(sv::ParameterDeclaration::Param(decl)) => {
                 for assign in decl.nodes.2.nodes.0.contents() {
                     self.params.push(ParamItem::from(raw, scope, assign));
                 }
@@ -133,7 +142,7 @@ pub struct ModuleItem {
 }
 
 impl ModuleItem {
-    fn from(raw: &RawDoc, scope: &Scope, name: &Identifier) -> Self {
+    fn from(raw: &RawDoc, scope: &Scope, name: &sv::Identifier) -> Self {
         let mut content = Context::default();
         content.analyze_scopes(raw, &scope.children);
         Self {
@@ -154,7 +163,7 @@ pub struct ParamItem {
 }
 
 impl ParamItem {
-    fn from<'a>(raw: &RawDoc, scope: &Scope, assign: &sv_parser::ParamAssignment) -> Self {
+    fn from<'a>(raw: &RawDoc, scope: &Scope, assign: &sv::ParamAssignment) -> Self {
         Self {
             doc: parse_docs(raw, &scope.comments),
             name: parse_ident(raw, &assign.nodes.0.nodes.0),
@@ -172,7 +181,7 @@ pub struct PortItem {
 }
 
 impl PortItem {
-    fn from<'a>(raw: &RawDoc, scope: &Scope, name: &Identifier) -> Self {
+    fn from<'a>(raw: &RawDoc, scope: &Scope, name: &sv::Identifier) -> Self {
         Self {
             doc: parse_docs(raw, &scope.comments),
             name: parse_ident(raw, name),
@@ -192,7 +201,7 @@ pub struct TypeItem {
 }
 
 impl TypeItem {
-    fn from(raw: &RawDoc, scope: &Scope, name: &Identifier, ty: &DataType) -> Self {
+    fn from(raw: &RawDoc, scope: &Scope, name: &sv::Identifier, ty: &sv::DataType) -> Self {
         Self {
             doc: parse_docs(raw, &scope.comments),
             name: parse_ident(raw, name),
@@ -217,7 +226,7 @@ impl VarItem {
         raw: &RawDoc,
         scope: &Scope,
         ty_nodes: impl Iterator<Item = RefNode<'a>>,
-        decl_assign: &sv_parser::NetDeclAssignment,
+        decl_assign: &sv::NetDeclAssignment,
     ) -> Self {
         Self {
             doc: parse_docs(raw, &scope.comments),
@@ -255,11 +264,11 @@ fn parse_docs(_raw: &RawDoc, comments: &[&str]) -> String {
     result
 }
 
-fn parse_ident(raw: &RawDoc, ident: &Identifier) -> String {
+fn parse_ident(raw: &RawDoc, ident: &sv::Identifier) -> String {
     raw.ast
         .get_str(match ident {
-            Identifier::SimpleIdentifier(si) => &si.nodes.0,
-            Identifier::EscapedIdentifier(si) => &si.nodes.0,
+            sv::Identifier::SimpleIdentifier(si) => &si.nodes.0,
+            sv::Identifier::EscapedIdentifier(si) => &si.nodes.0,
         })
         .unwrap()
         .to_string()

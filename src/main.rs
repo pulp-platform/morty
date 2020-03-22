@@ -333,14 +333,16 @@ fn main() -> Result<()> {
 
     info!("Parsing buffer.");
 
+    // Emit documentation if requested.
+    if let Some(dir) = matches.value_of("docdir") {
+        info!("Generating documentation in `{}`", dir);
+        let doc = doc::Doc::new(&syntax_trees);
+        let mut html = doc::Renderer::new(Path::new(dir));
+        html.render(&doc)?;
+        return Ok(());
+    }
+
     for pf in &syntax_trees {
-        if let Some(dir) = matches.value_of("docdir") {
-            info!("Generating documentation in `{}`", dir);
-            let mut html = doc::Renderer::new(Path::new(dir));
-            let doc = doc::Doc::new(&pf.ast);
-            html.render(&doc)?;
-            return Ok(());
-        }
         for node in &pf.ast {
             trace!("{:?}", node);
             match node {
