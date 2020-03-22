@@ -7,7 +7,7 @@
 #[macro_use]
 extern crate log;
 
-use anyhow::Result;
+use anyhow::{Context as _, Error, Result};
 use clap::{App, Arg};
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -15,7 +15,6 @@ use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::BufReader;
 use std::path::Path;
-use std::process::exit;
 use std::sync::{Arc, Mutex};
 use sv_parser::preprocess;
 use sv_parser::Error as SvParserError;
@@ -257,61 +256,64 @@ fn main() -> Result<()> {
             .collect();
 
         // For each file in the file bundle preprocess and parse it.
-        syntax_trees.extend(
-            bundle
-                .files
-                .par_iter()
-                .map(|filename| {
-                    info!("{:?}", filename);
-                    // Preprocess the verilog files.
-                    let buffer = match preprocess(
+        // Use a neat trick of `collect` here, which allows you to collect a
+        // `Result<T>` iterator into a `Result<Vec<T>>`, i.e. bubbling up the
+        // error.
+        let v: Result<Vec<(String, SyntaxTree)>> = bundle
+            .files
+            .par_iter()
+            .map(|filename| -> Result<_> {
+                info!("{:?}", filename);
+
+                // Preprocess the verilog files.
+                let buffer = String::from(
+                    preprocess(
                         filename,
                         &bundle_defines,
                         &bundle_include_dirs,
                         strip_comments,
                         false,
-                    ) {
-                        Ok(preprocessed) => String::from(preprocessed.0.text()),
-                        Err(err) => {
-                            eprintln!("{:?}", err);
-                            exit(1);
-                        }
-                    };
-                    // Optionally minimize the pre-processed string.
-                    let mut buffer = if minimize {
-                        let mut ret_buffer = String::new();
-                        for s in buffer.replace("\n", " ").split_ascii_whitespace() {
-                            ret_buffer.push_str(s);
-                            ret_buffer.push(' ');
-                        }
-                        ret_buffer
-                    } else {
-                        buffer
-                    };
-                    print!("{}", buffer);
-                    // Make sure that each file ends with a newline.
-                    if !buffer.ends_with("\n") {
-                        buffer.push('\n');
+                    )
+                    .with_context(|| format!("Failed to preprocess `{}`", filename))?
+                    .0
+                    .text(),
+                );
+
+                // Optionally minimize the pre-processed string.
+                let mut buffer = if minimize {
+                    let mut ret_buffer = String::new();
+                    for s in buffer.replace("\n", " ").split_ascii_whitespace() {
+                        ret_buffer.push_str(s);
+                        ret_buffer.push(' ');
                     }
-                    let syntax_tee = match parse_sv_str(
-                        buffer.as_str(),
-                        filename,
-                        &HashMap::new(),
-                        &Vec::<String>::new(),
-                        false,
-                    ) {
-                        Ok((syntax_tree, _)) => syntax_tree,
-                        Err(err) => {
-                            let mut printer = &mut *printer.lock().unwrap();
-                            assert!(print_parse_error(&mut printer, err, false).is_ok());
-                            exit(1);
-                        }
-                    };
-                    (buffer, syntax_tee)
-                })
-                .collect::<Vec<(String, SyntaxTree)>>(),
-        );
-        // .collect_into_vec(&mut syntax_trees);
+                    ret_buffer
+                } else {
+                    buffer
+                };
+                // print!("{}", buffer);
+
+                // Make sure that each file ends with a newline.
+                if !buffer.ends_with("\n") {
+                    buffer.push('\n');
+                }
+                let syntax_tee = parse_sv_str(
+                    buffer.as_str(),
+                    filename,
+                    &HashMap::new(),
+                    &Vec::<String>::new(),
+                    false,
+                )
+                .or_else(|err| -> Result<_> {
+                    let mut printer = &mut *printer.lock().unwrap();
+                    print_parse_error(&mut printer, &err, false)?;
+                    Err(Error::new(err))
+                })?
+                .0;
+
+                Ok((buffer, syntax_tee))
+            })
+            .collect();
+        syntax_trees.extend(v?);
     }
 
     // Just preprocess.
@@ -430,16 +432,16 @@ struct FileBundle {
 #[cfg_attr(tarpaulin, skip)]
 fn print_parse_error(
     printer: &mut printer::Printer,
-    error: SvParserError,
+    error: &SvParserError,
     single: bool,
 ) -> Result<()> {
     match error {
         SvParserError::Parse(Some((path, pos))) => {
-            printer.print_parse_error(&path, pos, single)?;
+            printer.print_parse_error(path, *pos, single)?;
         }
         SvParserError::Include { source: x } => {
-            if let SvParserError::File { path: x, .. } = *x {
-                printer.print_error(&format!("failed to include '{}'", x.to_string_lossy()))?;
+            if let SvParserError::File { path: x, .. } = x.as_ref() {
+                printer.print_error(&format!("failed to include '{}'", x.display()))?;
             }
         }
         SvParserError::DefineArgNotFound(x) => {
