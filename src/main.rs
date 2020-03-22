@@ -56,6 +56,7 @@ impl<'a> Pickle<'a> {
         debug!("Declaration `{}`: {:?}", module_name, loc);
         self.rename_table.insert(module_name, new_name);
     }
+
     /// Register a usage of the identifier.
     fn register_usage(&mut self, syntax_tree: &SyntaxTree, id: RefNode) {
         let (inst_name, loc) = get_identifier(&syntax_tree, id);
@@ -331,8 +332,6 @@ fn main() -> Result<()> {
 
     info!("Finished reading {} source files.", syntax_trees.len());
 
-    info!("Parsing buffer.");
-
     // Emit documentation if requested.
     if let Some(dir) = matches.value_of("docdir") {
         info!("Generating documentation in `{}`", dir);
@@ -342,6 +341,7 @@ fn main() -> Result<()> {
         return Ok(());
     }
 
+    // Gather information for pickling.
     for pf in &syntax_trees {
         for node in &pf.ast {
             trace!("{:?}", node);
@@ -370,6 +370,8 @@ fn main() -> Result<()> {
             }
         }
     }
+
+    // Emit the pickled source files.
     for pf in &syntax_trees {
         // For each file, start with a clean replacement table.
         pickle.replace_table.clear();
