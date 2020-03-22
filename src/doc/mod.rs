@@ -114,12 +114,22 @@ impl Context {
             }
             RefNode::ParameterDeclaration(sv::ParameterDeclaration::Param(decl)) => {
                 for assign in decl.nodes.2.nodes.0.contents() {
-                    self.params.push(ParamItem::from(raw, scope, assign));
+                    self.params.push(ParamItem::from_param(raw, scope, assign));
+                }
+            }
+            RefNode::ParameterDeclaration(sv::ParameterDeclaration::Type(decl)) => {
+                for assign in decl.nodes.2.nodes.0.contents() {
+                    self.params.push(ParamItem::from_type(raw, scope, assign));
                 }
             }
             RefNode::LocalParameterDeclaration(sv::LocalParameterDeclaration::Param(decl)) => {
                 for assign in decl.nodes.2.nodes.0.contents() {
-                    self.params.push(ParamItem::from(raw, scope, assign));
+                    self.params.push(ParamItem::from_param(raw, scope, assign));
+                }
+            }
+            RefNode::LocalParameterDeclaration(sv::LocalParameterDeclaration::Type(decl)) => {
+                for assign in decl.nodes.2.nodes.0.contents() {
+                    self.params.push(ParamItem::from_type(raw, scope, assign));
                 }
             }
             _ => {
@@ -196,7 +206,14 @@ pub struct ParamItem {
 }
 
 impl ParamItem {
-    fn from<'a>(raw: &RawDoc, scope: &Scope, assign: &sv::ParamAssignment) -> Self {
+    fn from_param<'a>(raw: &RawDoc, scope: &Scope, assign: &sv::ParamAssignment) -> Self {
+        Self {
+            doc: parse_docs(raw, &scope.comments),
+            name: parse_ident(raw, &assign.nodes.0.nodes.0),
+        }
+    }
+
+    fn from_type<'a>(raw: &RawDoc, scope: &Scope, assign: &sv::TypeAssignment) -> Self {
         Self {
             doc: parse_docs(raw, &scope.comments),
             name: parse_ident(raw, &assign.nodes.0.nodes.0),
