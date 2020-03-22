@@ -112,6 +112,11 @@ impl Context {
                     self.params.push(ParamItem::from(raw, scope, assign));
                 }
             }
+            RefNode::LocalParameterDeclaration(sv::LocalParameterDeclaration::Param(decl)) => {
+                for assign in decl.nodes.2.nodes.0.contents() {
+                    self.params.push(ParamItem::from(raw, scope, assign));
+                }
+            }
             _ => {
                 warn!("Discarding raw doc for {}", node);
                 trace!("{:?}", node);

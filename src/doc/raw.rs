@@ -52,6 +52,7 @@ impl<'a> RawDoc<'a> {
                     RefNode::TypeDeclaration(..)
                     | RefNode::NetDeclaration(..)
                     | RefNode::ParameterDeclaration(..)
+                    | RefNode::LocalParameterDeclaration(..)
                     | RefNode::AnsiPortDeclaration(..)
                     | RefNode::ModuleDeclaration(..) => {
                         last_comment = LastComment::None;
