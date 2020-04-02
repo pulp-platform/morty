@@ -18,7 +18,7 @@ use std::path::Path;
 use std::sync::{Arc, Mutex};
 use sv_parser::preprocess;
 use sv_parser::Error as SvParserError;
-use sv_parser::{parse_sv_str, unwrap_node, Define, DefineText, Locate, RefNode, SyntaxTree};
+use sv_parser::{parse_sv_pp, unwrap_node, Define, DefineText, Locate, RefNode, SyntaxTree};
 
 pub mod doc;
 mod printer;
@@ -140,11 +140,6 @@ fn main() -> Result<()> {
                 .number_of_values(1),
         )
         .arg(
-            Arg::with_name("minimize")
-                .long("minimize")
-                .help("Minimize the output (also strips comments)"),
-        )
-        .arg(
             Arg::with_name("strip_comments")
                 .long("strip-comments")
                 .help("Strip comments from the output"),
@@ -235,8 +230,7 @@ fn main() -> Result<()> {
     let printer = Arc::new(Mutex::new(printer::Printer::new()));
     let mut syntax_trees = vec![];
 
-    let minimize = matches.is_present("minimize");
-    let strip_comments = matches.is_present("strip_comments") | minimize;
+    let strip_comments = matches.is_present("strip_comments");
     for bundle in file_list {
         let bundle_include_dirs: Vec<_> = bundle.include_dirs.iter().map(Path::new).collect();
         // Convert the preprocessor defines into the appropriate format which is understood by `sv-parser`
@@ -267,54 +261,28 @@ fn main() -> Result<()> {
                 info!("{:?}", filename);
 
                 // Preprocess the verilog files.
-                let buffer = String::from(
-                    preprocess(
-                        filename,
-                        &bundle_defines,
-                        &bundle_include_dirs,
-                        strip_comments,
-                        false,
-                    )
-                    .with_context(|| format!("Failed to preprocess `{}`", filename))?
-                    .0
-                    .text(),
-                );
-
-                // Optionally minimize the pre-processed string.
-                let mut buffer = if minimize {
-                    let mut ret_buffer = String::new();
-                    for s in buffer.replace("\n", " ").split_ascii_whitespace() {
-                        ret_buffer.push_str(s);
-                        ret_buffer.push(' ');
-                    }
-                    ret_buffer
-                } else {
-                    buffer
-                };
-                // print!("{}", buffer);
-
-                // Make sure that each file ends with a newline.
-                if !buffer.ends_with("\n") {
-                    buffer.push('\n');
-                }
-                let syntax_tee = parse_sv_str(
-                    buffer.as_str(),
+                let pp = preprocess(
                     filename,
-                    &HashMap::new(),
-                    &Vec::<String>::new(),
+                    &bundle_defines,
+                    &bundle_include_dirs,
+                    strip_comments,
                     false,
                 )
-                .or_else(|err| -> Result<_> {
-                    let mut printer = &mut *printer.lock().unwrap();
-                    print_parse_error(&mut printer, &err, false)?;
-                    Err(Error::new(err))
-                })?
-                .0;
+                .with_context(|| format!("Failed to preprocess `{}`", filename))?;
+
+                let buffer = pp.0.text().to_string();
+                let syntax_tree = parse_sv_pp(pp.0, pp.1)
+                    .or_else(|err| -> Result<_> {
+                        let mut printer = &mut *printer.lock().unwrap();
+                        print_parse_error(&mut printer, &err, false)?;
+                        Err(Error::new(err))
+                    })?
+                    .0;
 
                 Ok(ParsedFile {
                     path: filename.clone(),
                     source: buffer,
-                    ast: syntax_tee,
+                    ast: syntax_tree,
                 })
             })
             .collect();
@@ -412,6 +380,10 @@ fn main() -> Result<()> {
             pos = offset + len;
         }
         print!("{}", &pf.source[pos..]);
+        // Make sure that each file ends with a newline.
+        if !pf.source.ends_with('\n') {
+            println!();
+        }
     }
 
     Ok(())
