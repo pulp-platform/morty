@@ -6,6 +6,13 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## Unreleased
 
+### Changed
+- Re-name `exclude` to `exclude-rename` as it only excludes the module from renaming.
+
+### Added
+- Add real `exclude` option which excludes specified interfaces, modules and packages
+  from being included in the file list.
+
 ## 0.4.0 - 2020-04-02
 ### Changed
 - Use `rayon` to parallelize source file parsing.
