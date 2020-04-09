@@ -12,6 +12,7 @@ use clap::{App, Arg};
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
+use std::convert::TryFrom;
 use std::fs::File;
 use std::io::BufReader;
 use std::path::Path;
@@ -32,6 +33,8 @@ struct Pickle<'a> {
     /// Optional name suffix.
     suffix: Option<&'a str>,
     /// Declarations which are excluded from re-naming.
+    exclude_rename: HashSet<&'a str>,
+    /// Declarations which are excluded from the pickled sources.
     exclude: HashSet<&'a str>,
     /// Table containing thing that should be re-named.
     rename_table: HashMap<String, String>,
@@ -43,7 +46,9 @@ impl<'a> Pickle<'a> {
     /// Register a declaration such as a package or module.
     fn register_declaration(&mut self, syntax_tree: &SyntaxTree, id: RefNode) {
         let (module_name, loc) = get_identifier(syntax_tree, id);
-        if self.exclude.contains(module_name.as_str()) {
+        if self.exclude_rename.contains(module_name.as_str())
+            || self.exclude.contains(module_name.as_str())
+        {
             return;
         }
         let mut new_name = module_name.clone();
@@ -68,6 +73,16 @@ impl<'a> Pickle<'a> {
         self.replace_table
             .push((loc.offset, loc.len, new_name.clone()));
     }
+
+    // Check whether a given declaration should be striped from the sources.
+    fn register_exclude(&mut self, syntax_tree: &SyntaxTree, id: RefNode, locate: Locate) {
+        let (inst_name, loc) = get_identifier(&syntax_tree, id);
+        if self.exclude.contains(inst_name.as_str()) {
+            debug!("Exclude `{}`: {:?}", inst_name, loc);
+            self.replace_table
+                .push((locate.offset, locate.len, "".to_string()));
+        }
+    }
 }
 
 fn main() -> Result<()> {
@@ -85,11 +100,20 @@ fn main() -> Result<()> {
                 .number_of_values(1),
         )
         .arg(
-            Arg::with_name("exclude")
+            Arg::with_name("exclude_rename")
                 .short("e")
+                .long("exclude-rename")
+                .value_name("MODULE|INTERFACE|PACKAGE")
+                .help("Add module, interface, package which should not be renamed")
+                .multiple(true)
+                .takes_value(true)
+                .number_of_values(1),
+        )
+        .arg(
+            Arg::with_name("exclude")
                 .long("exclude")
-                .value_name("MODULE")
-                .help("Add modules which should not be renamed")
+                .value_name("MODULE|INTERFACE|PACKAGE")
+                .help("Do not include module, interface, package in the pickled file list")
                 .multiple(true)
                 .takes_value(true)
                 .number_of_values(1),
@@ -213,17 +237,19 @@ fn main() -> Result<()> {
         });
     }
 
-    let mut exclude = HashSet::new();
+    let (mut exclude_rename, mut exclude) = (HashSet::new(), HashSet::new());
+    exclude_rename.extend(matches.values_of("exclude_rename").into_iter().flatten());
     exclude.extend(matches.values_of("exclude").into_iter().flatten());
 
     let mut pickle = Pickle {
         // Collect renaming options.
         prefix: matches.value_of("prefix"),
         suffix: matches.value_of("suffix"),
+        exclude_rename,
         exclude,
         // Create a rename table.
         rename_table: HashMap::new(),
-        replace_table: Vec::new(),
+        replace_table: vec![],
     };
 
     // Parse the input files.
@@ -312,7 +338,7 @@ fn main() -> Result<()> {
     // Gather information for pickling.
     for pf in &syntax_trees {
         for node in &pf.ast {
-            trace!("{:?}", node);
+            trace!("{:#?}", node);
             match node {
                 // Module declarations.
                 RefNode::ModuleDeclarationAnsi(x) => {
@@ -366,14 +392,35 @@ fn main() -> Result<()> {
                     let id = unwrap_node!(x, SimpleIdentifier).unwrap();
                     pickle.register_usage(&pf.ast, id);
                 }
+                // Check whether we want to exclude the given module from the file sources.
+                RefNode::ModuleDeclarationAnsi(x) => {
+                    let id = unwrap_node!(x, SimpleIdentifier).unwrap();
+                    pickle.register_exclude(&pf.ast, id, Locate::try_from(x).unwrap())
+                }
+                RefNode::ModuleDeclarationNonansi(x) => {
+                    let id = unwrap_node!(x, SimpleIdentifier).unwrap();
+                    pickle.register_exclude(&pf.ast, id, Locate::try_from(x).unwrap())
+                }
+                RefNode::InterfaceDeclaration(x) => {
+                    let id = unwrap_node!(x, SimpleIdentifier).unwrap();
+                    pickle.register_exclude(&pf.ast, id, Locate::try_from(x).unwrap())
+                }
+                RefNode::PackageDeclaration(x) => {
+                    let id = unwrap_node!(x, SimpleIdentifier).unwrap();
+                    pickle.register_exclude(&pf.ast, id, Locate::try_from(x).unwrap())
+                }
                 _ => (),
             }
         }
         // Replace according to `replace_table`.
         // Apply the replacements.
-        debug!("{:?}", pickle.replace_table);
+        debug!("Replace Table: {:?}", pickle.replace_table);
         let mut pos = 0;
         for (offset, len, repl) in pickle.replace_table.iter() {
+            // Because we are partially stripping modules it can be the case that we don't need to apply some of the upcoming replacements.
+            if pos > *offset {
+                continue;
+            }
             trace!("Replacing: {},{}, {}", offset, len, repl);
             print!("{}", &pf.source[pos..*offset]);
             print!("{}", repl);
