@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ### Changed
 - Re-name `exclude` to `exclude-rename` as it only excludes the module from renaming.
+- Updated `sv-parser` to `0.6.5`
 
 ### Added
 - Add real `exclude` option which excludes specified interfaces, modules and packages
