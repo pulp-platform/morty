@@ -62,7 +62,7 @@ Alternatively, if you want to pass more files, `morty` will also parse manifest 
 ]
 ```
 
-## Comments and Minimization
+## Comments Stripping
 
-Optionally, `morty` can minimize (`--minimize`) and strip comments (`--strip-comments`) of the pickled sources. Minimization also implies to strip comments.
+Optionally, `morty` can strip comments (`--strip-comments`) of the pickled sources.
 
