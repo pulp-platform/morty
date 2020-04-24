@@ -41,7 +41,7 @@ impl<'a> RawDoc<'a> {
                             }
                             last_comment = LastComment::Parent;
                             comments.push(&s[3..]);
-                        } else if s.starts_with("///") {
+                        } else if s.starts_with("///") && !s.starts_with("////") {
                             if !comments.is_empty() && last_comment != LastComment::Local {
                                 comments.push("");
                             }
