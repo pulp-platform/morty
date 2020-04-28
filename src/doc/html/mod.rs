@@ -224,7 +224,7 @@ impl<'a> Renderer<'a> {
             for i in &cx.params {
                 write!(
                     out,
-                    "<h3 id=\"impl\" class=\"impl\"><code class=\"in-band\">{}</code></h3>",
+                    "<h3 id=\"parameter.{0}\" class=\"impl\"><code class=\"in-band\">{0}</code></h3>",
                     i.name
                 )?;
                 write!(out, "<div class=\"docblock\"\n>")?;
@@ -237,7 +237,7 @@ impl<'a> Renderer<'a> {
             for i in &cx.ports {
                 write!(
                     out,
-                    "<h3 id=\"impl\" class=\"impl\"><code class=\"in-band\">{}</code></h3>",
+                    "<h3 id=\"port.{0}\" class=\"impl\"><code class=\"in-band\">{0}</code></h3>",
                     i.name
                 )?;
                 write!(out, "<div class=\"docblock\"\n>")?;
@@ -267,7 +267,7 @@ impl<'a> Renderer<'a> {
             for i in &cx.vars {
                 write!(
                     out,
-                    "<h3 id=\"impl\" class=\"impl\"><code class=\"in-band\">{}: {}</code></h3>",
+                    "<h3 id=\"signal.{0}\" class=\"impl\"><code class=\"in-band\">{0}: {1}</code></h3>",
                     i.name, i.ty
                 )?;
                 write!(out, "<div class=\"docblock\"\n>")?;
