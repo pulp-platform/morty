@@ -109,8 +109,12 @@ impl Context {
                 _ => return,
             },
             RefNode::AnsiPortDeclaration(sv::AnsiPortDeclaration::Net(decl)) => {
-                self.ports
-                    .push(PortItem::from(raw, scope, &decl.nodes.1.nodes.0));
+                self.ports.push(PortItem::from(
+                    raw,
+                    scope,
+                    &decl.nodes.1.nodes.0,
+                    &decl.nodes.0,
+                ));
             }
             RefNode::ParameterDeclaration(sv::ParameterDeclaration::Param(decl)) => {
                 for assign in decl.nodes.2.nodes.0.contents() {
@@ -228,13 +232,21 @@ pub struct PortItem {
     pub doc: String,
     /// Port name.
     pub name: String,
+    /// Port type.
+    pub ty: String,
 }
 
 impl PortItem {
-    fn from<'a>(raw: &RawDoc, scope: &Scope, name: &sv::Identifier) -> Self {
+    fn from<'a>(
+        raw: &RawDoc,
+        scope: &Scope,
+        name: &sv::Identifier,
+        ty: &Option<sv::NetPortHeaderOrInterfacePortHeader>,
+    ) -> Self {
         Self {
             doc: parse_docs(raw, &scope.comments),
             name: parse_ident(raw, name),
+            ty: raw.ast.get_str(ty).unwrap().trim().to_string(),
         }
     }
 }
