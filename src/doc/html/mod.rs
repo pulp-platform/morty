@@ -273,7 +273,7 @@ impl<'a> Renderer<'a> {
             for i in &cx.vars {
                 write!(
                     out,
-                    "<h3 id=\"signal.{0}\" class=\"impl\"><code class=\"in-band\">{0}: {1}</code></h3>",
+                    "<h3 id=\"signal.{0}\" class=\"impl\"><code class=\"in-band\">{0}<span class=\"type-annotation\">: {1}</span></code></h3>",
                     i.name, i.ty
                 )?;
                 write!(out, "<div class=\"docblock\"\n>")?;
