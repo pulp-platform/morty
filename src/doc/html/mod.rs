@@ -186,7 +186,7 @@ impl<'a> Renderer<'a> {
 
     fn render_contents(&mut self, cx: &Context, out: &mut impl Write) -> Result<()> {
         if !cx.packages.is_empty() {
-            write!(out, "<h2>Packages</h2>\n")?;
+            write!(out, "<h2 id=\"packages\">Packages</h2>\n")?;
             write!(out, "<table>\n")?;
             for i in &cx.packages {
                 write!(
@@ -203,7 +203,7 @@ impl<'a> Renderer<'a> {
             write!(out, "</table>\n")?;
         }
         if !cx.modules.is_empty() {
-            write!(out, "<h2>Modules</h2>\n")?;
+            write!(out, "<h2 id=\"modules\">Modules</h2>\n")?;
             write!(out, "<table>\n")?;
             for i in &cx.modules {
                 write!(
@@ -220,7 +220,7 @@ impl<'a> Renderer<'a> {
             write!(out, "</table>\n")?;
         }
         if !cx.params.is_empty() {
-            write!(out, "<h2>Parameters</h2>\n")?;
+            write!(out, "<h2 id=\"parameters\">Parameters</h2>\n")?;
             for i in &cx.params {
                 write!(
                     out,
@@ -233,7 +233,7 @@ impl<'a> Renderer<'a> {
             }
         }
         if !cx.ports.is_empty() {
-            write!(out, "<h2>Ports</h2>\n")?;
+            write!(out, "<h2 id=\"ports\">Ports</h2>\n")?;
             for i in &cx.ports {
                 write!(
                     out,
@@ -246,7 +246,7 @@ impl<'a> Renderer<'a> {
             }
         }
         if !cx.types.is_empty() {
-            write!(out, "<h2>Types</h2>\n")?;
+            write!(out, "<h2 id=\"types\">Types</h2>\n")?;
             write!(out, "<table>\n")?;
             for i in &cx.types {
                 write!(
@@ -263,7 +263,7 @@ impl<'a> Renderer<'a> {
             write!(out, "</table>\n")?;
         }
         if !cx.vars.is_empty() {
-            write!(out, "<h2>Signals</h2>\n")?;
+            write!(out, "<h2 id=\"signals\">Signals</h2>\n")?;
             for i in &cx.vars {
                 write!(
                     out,
