@@ -330,3 +330,32 @@ impl<'a> Renderer<'a> {
         self.dir.join(self.subpath_to_type(name))
     }
 }
+
+/// HTML identifier (value of `id` field).
+trait Id {
+    fn html_id(&self) -> String;
+}
+
+impl Id for ParamItem {
+    fn html_id(&self) -> String {
+        format!("parameter.{}", self.name)
+    }
+}
+
+impl Id for PortItem {
+    fn html_id(&self) -> String {
+        format!("port.{}", self.name)
+    }
+}
+
+impl Id for TypeItem {
+    fn html_id(&self) -> String {
+        format!("type.{}", self.name)
+    }
+}
+
+impl Id for VarItem {
+    fn html_id(&self) -> String {
+        format!("signal.{}", self.name)
+    }
+}
