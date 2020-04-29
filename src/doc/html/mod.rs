@@ -31,6 +31,10 @@ impl<'a> Renderer<'a> {
             out,
             "<link rel=\"stylesheet\" type=\"text/css\" href=\"static/light.css\">"
         )?;
+        writeln!(
+            out,
+            "<link rel=\"stylesheet\" type=\"text/css\" href=\"static/svdoc.css\">"
+        )?;
         Ok(())
     }
 
@@ -49,6 +53,7 @@ impl<'a> Renderer<'a> {
 
         write(static_path.join("light.css"), static_files::LIGHT)?;
         write(static_path.join("rustdoc.css"), static_files::RUSTDOC_CSS)?;
+        write(static_path.join("svdoc.css"), static_files::SVDOC_CSS)?;
         write(
             static_path.join("SourceSerifPro-Regular.ttf.woff"),
             static_files::source_serif_pro::REGULAR,

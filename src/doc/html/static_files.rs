@@ -3,6 +3,8 @@
 pub static LIGHT: &str = include_str!("static/light.css");
 /// The file contents of the main `rustdoc.css` file, responsible for the core layout of the page.
 pub static RUSTDOC_CSS: &str = include_str!("static/rustdoc.css");
+/// The file contents of the `svdoc.css` SystemVerilog stylesheet file.
+pub static SVDOC_CSS: &str = include_str!("static/svdoc.css");
 
 /// Files related to the Fira Sans font.
 pub mod fira_sans {
