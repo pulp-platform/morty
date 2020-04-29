@@ -220,7 +220,7 @@ impl<'a> Renderer<'a> {
             write!(out, "</table>\n")?;
         }
         if !cx.params.is_empty() {
-            write!(out, "<h2 id=\"parameters\">Parameters</h2>\n")?;
+            write!(out, "<h2 id=\"parameters\" class=\"section-header\"><a href=\"#parameters\">Parameters</a></h2>\n")?;
             for i in &cx.params {
                 write!(
                     out,
@@ -233,7 +233,10 @@ impl<'a> Renderer<'a> {
             }
         }
         if !cx.ports.is_empty() {
-            write!(out, "<h2 id=\"ports\">Ports</h2>\n")?;
+            write!(
+                out,
+                "<h2 id=\"ports\" class=\"section-header\"><a href=\"#ports\">Ports</a></h2>\n"
+            )?;
             for i in &cx.ports {
                 write!(
                     out,
@@ -246,7 +249,10 @@ impl<'a> Renderer<'a> {
             }
         }
         if !cx.types.is_empty() {
-            write!(out, "<h2 id=\"types\">Types</h2>\n")?;
+            write!(
+                out,
+                "<h2 id=\"types\" class=\"section-header\"><a href=\"#types\">Types<a></h2>\n"
+            )?;
             write!(out, "<table>\n")?;
             for i in &cx.types {
                 write!(
@@ -263,7 +269,7 @@ impl<'a> Renderer<'a> {
             write!(out, "</table>\n")?;
         }
         if !cx.vars.is_empty() {
-            write!(out, "<h2 id=\"signals\">Signals</h2>\n")?;
+            write!(out, "<h2 id=\"signals\" class=\"section-header\"><a href=\"#signals\">Signals</a></h2>\n")?;
             for i in &cx.vars {
                 write!(
                     out,
