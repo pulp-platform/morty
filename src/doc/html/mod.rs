@@ -229,7 +229,7 @@ impl<'a> Renderer<'a> {
             for i in &cx.params {
                 write!(
                     out,
-                    "<h3 id=\"{2}\" class=\"impl\"><code class=\"in-band\">{0}<span class=\"type-annotation\">: {1}</span></code></h3>",
+                    "<h3 id=\"{2}\" class=\"impl\"><code class=\"in-band\"><a href=\"#{2}\">{0}</a><span class=\"type-annotation\">: {1}</span></code></h3>",
                     i.name,
                     i.ty,
                     i.html_id(),
@@ -247,7 +247,7 @@ impl<'a> Renderer<'a> {
             for i in &cx.ports {
                 write!(
                     out,
-                    "<h3 id=\"{2}\" class=\"impl\"><code class=\"in-band\">{0}<span class=\"type-annotation\">: {1}</span></code></h3>",
+                    "<h3 id=\"{2}\" class=\"impl\"><code class=\"in-band\"><a href=\"#{2}\">{0}</a><span class=\"type-annotation\">: {1}</span></code></h3>",
                     i.name,
                     i.ty,
                     i.html_id(),
@@ -282,7 +282,7 @@ impl<'a> Renderer<'a> {
             for i in &cx.vars {
                 write!(
                     out,
-                    "<h3 id=\"{2}\" class=\"impl\"><code class=\"in-band\">{0}<span class=\"type-annotation\">: {1}</span></code></h3>",
+                    "<h3 id=\"{2}\" class=\"impl\"><code class=\"in-band\"><a href=\"#{2}\">{0}</a><span class=\"type-annotation\">: {1}</span></code></h3>",
                     i.name,
                     i.ty,
                     i.html_id(),
