@@ -1,5 +1,6 @@
 ![CI](https://github.com/zarubaf/morty/workflows/CI/badge.svg?branch=master)
 [![Crate](https://img.shields.io/crates/v/morty.svg)](https://crates.io/crates/morty)
+[![dependency status](https://deps.rs/repo/github/zarubaf/morty/status.svg)](https://deps.rs/repo/github/zarubaf/morty)
 # Morty
 
 _Come on, flip the pickle, Morty, you're not gonna regret it. The payoff is huge. I turned myself into a pickle, Morty!_

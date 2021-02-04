@@ -5,8 +5,15 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
+
+
+## 0.5.1 - 2021-02-04
 ### Fixed
 - Ignore comments starting with four slashes in documentation.
+- Update `sv-parser` to `0.10.8`
+- Update `pulldown-cmark` to `0.8.0`
+- Update `failure` to `0.1.8`
+- Update `colored` to `2.0.0`
 
 ## 0.5.0 - 2020-04-10
 ### Changed

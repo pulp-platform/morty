@@ -297,7 +297,7 @@ fn main() -> Result<()> {
                 .with_context(|| format!("Failed to preprocess `{}`", filename))?;
 
                 let buffer = pp.0.text().to_string();
-                let syntax_tree = parse_sv_pp(pp.0, pp.1)
+                let syntax_tree = parse_sv_pp(pp.0, pp.1, false)
                     .or_else(|err| -> Result<_> {
                         let mut printer = &mut *printer.lock().unwrap();
                         print_parse_error(&mut printer, &err, false)?;
