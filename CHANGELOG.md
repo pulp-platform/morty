@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ## Unreleased
 
 
+## 0.5.2 - 2021-02-04
+### Fixed
+- Fixed deprecated `add-path` in CI
+
 ## 0.5.1 - 2021-02-04
 ### Fixed
 - Ignore comments starting with four slashes in documentation.
