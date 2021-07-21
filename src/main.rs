@@ -14,9 +14,11 @@ use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::convert::TryFrom;
 use std::fs::File;
-use std::io::BufReader;
+use std::io::{BufReader, BufWriter};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
+use std::io::Write;
+use std::io;
 use sv_parser::preprocess;
 use sv_parser::Error as SvParserError;
 use sv_parser::{parse_sv_pp, unwrap_node, Define, DefineText, Locate, RefNode, SyntaxTree};
@@ -180,6 +182,12 @@ fn main() -> Result<()> {
                 .value_name("OUTDIR")
                 .help("Generate documentation in a directory")
                 .takes_value(true),
+        ).arg(
+            Arg::with_name("output")
+                .short("o")
+                .value_name("FILE")
+                .help("Write output to file")
+                .takes_value(true),
         )
         .get_matches();
 
@@ -315,12 +323,22 @@ fn main() -> Result<()> {
         syntax_trees.extend(v?);
     }
 
+    let mut out = match matches.value_of("output") {
+        Some(file) => {
+            info!("Setting output to `{}`", file);
+            let path = Path::new(file);
+            Box::new(BufWriter::new(File::create(&path).unwrap())) as Box<dyn Write>
+        }
+        None => Box::new(io::stdout()) as Box<dyn Write>
+    };
+
     // Just preprocess.
     if matches.is_present("preproc") {
         for pf in syntax_trees {
             eprintln!("{}:", pf.path);
-            println!("{:}", pf.source);
+            writeln!(out, "{:}", pf.source).unwrap();
         }
+        out.flush().unwrap();
         return Ok(());
     }
 
@@ -422,16 +440,17 @@ fn main() -> Result<()> {
                 continue;
             }
             trace!("Replacing: {},{}, {}", offset, len, repl);
-            print!("{}", &pf.source[pos..*offset]);
-            print!("{}", repl);
+            write!(out, "{}", &pf.source[pos..*offset]).unwrap();
+            write!(out, "{}", repl).unwrap();
             pos = offset + len;
         }
-        print!("{}", &pf.source[pos..]);
+        write!(out, "{}", &pf.source[pos..]).unwrap();
         // Make sure that each file ends with a newline.
         if !pf.source.ends_with('\n') {
-            println!();
+            writeln!(out).unwrap();
         }
     }
+    out.flush().unwrap();
 
     Ok(())
 }
