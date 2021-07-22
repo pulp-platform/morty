@@ -1,6 +1,6 @@
 [package]
 name = "morty"
-version = "0.5.2"
+version = "0.5.2-dev"
 description = "A SystemVerilog source file pickler."
 authors = ["Florian Zaruba <zarubaf@iis.ee.ethz.ch>", "Fabian Schuiki <fschuiki@iis.ee.ethz.ch>"]
 edition = "2018"
@@ -14,7 +14,7 @@ readme = "README.md"
 anyhow = "1.0"
 term = "0.6"
 clap = "2"
-sv-parser = "0.10.8"
+sv-parser = "0.11.1"
 failure = "0.1.8"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
