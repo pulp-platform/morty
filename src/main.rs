@@ -14,11 +14,11 @@ use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::convert::TryFrom;
 use std::fs::File;
+use std::io;
+use std::io::Write;
 use std::io::{BufReader, BufWriter};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
-use std::io::Write;
-use std::io;
 use sv_parser::preprocess;
 use sv_parser::Error as SvParserError;
 use sv_parser::{parse_sv_pp, unwrap_node, Define, DefineText, Locate, RefNode, SyntaxTree};
@@ -182,7 +182,8 @@ fn main() -> Result<()> {
                 .value_name("OUTDIR")
                 .help("Generate documentation in a directory")
                 .takes_value(true),
-        ).arg(
+        )
+        .arg(
             Arg::with_name("output")
                 .short("o")
                 .value_name("FILE")
@@ -329,7 +330,7 @@ fn main() -> Result<()> {
             let path = Path::new(file);
             Box::new(BufWriter::new(File::create(&path).unwrap())) as Box<dyn Write>
         }
-        None => Box::new(io::stdout()) as Box<dyn Write>
+        None => Box::new(io::stdout()) as Box<dyn Write>,
     };
 
     // Just preprocess.
