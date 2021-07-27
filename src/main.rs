@@ -9,8 +9,10 @@ extern crate log;
 
 use anyhow::{Context as _, Error, Result};
 use clap::{App, Arg};
+use log::LevelFilter;
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
+use simple_logger::SimpleLogger;
 use std::collections::{HashMap, HashSet};
 use std::convert::TryFrom;
 use std::fs::File;
@@ -193,13 +195,15 @@ fn main() -> Result<()> {
         .get_matches();
 
     // Instantiate a new logger with the verbosity level the user requested.
-    simple_logger::init_with_level(match matches.occurrences_of("v") {
-        0 => log::Level::Warn,
-        1 => log::Level::Info,
-        2 => log::Level::Debug,
-        3 | _ => log::Level::Trace,
-    })
-    .unwrap();
+    SimpleLogger::new()
+        .with_level(match matches.occurrences_of("v") {
+            0 => LevelFilter::Warn,
+            1 => LevelFilter::Info,
+            2 => LevelFilter::Debug,
+            3 | _ => LevelFilter::Trace,
+        })
+        .init()
+        .unwrap();
 
     let mut file_list = Vec::new();
 
