@@ -42,6 +42,8 @@ struct Pickle<'a> {
     rename_table: HashMap<String, String>,
     /// Locations of text which should be replaced.
     replace_table: Vec<(usize, usize, String)>,
+    /// A set of instantiated modules.
+    inst_table: HashSet<String>,
 }
 
 impl<'a> Pickle<'a> {
@@ -62,6 +64,11 @@ impl<'a> Pickle<'a> {
         }
         debug!("Declaration `{}`: {:?}", module_name, loc);
         self.rename_table.insert(module_name, new_name);
+    }
+
+    fn register_instantiation(&mut self, syntax_tree: &SyntaxTree, id: RefNode) {
+        let (inst_name, _) = get_identifier(&syntax_tree, id);
+        self.inst_table.insert(inst_name);
     }
 
     /// Register a usage of the identifier.
@@ -190,6 +197,11 @@ fn main() -> Result<()> {
                 .help("Write output to file")
                 .takes_value(true),
         )
+        .arg(
+            Arg::with_name("write_undefined")
+                .long("write-undefined")
+                .help("Output a list of undefined modules to `undefined.morty`"),
+        )
         .get_matches();
 
     // Instantiate a new logger with the verbosity level the user requested.
@@ -259,6 +271,7 @@ fn main() -> Result<()> {
         // Create a rename table.
         rename_table: HashMap::new(),
         replace_table: vec![],
+        inst_table: HashSet::new(),
     };
 
     // Parse the input files.
@@ -391,6 +404,10 @@ fn main() -> Result<()> {
         // Iterate again and check for usage
         for node in &pf.ast {
             match node {
+                RefNode::ModuleInstantiation(x) => {
+                    let id = unwrap_node!(x, SimpleIdentifier).unwrap();
+                    pickle.register_instantiation(&pf.ast, id);
+                }
                 // Instantiations, end-labels.
                 RefNode::ModuleIdentifier(x) => {
                     let id = unwrap_node!(x, SimpleIdentifier).unwrap();
@@ -452,6 +469,17 @@ fn main() -> Result<()> {
         }
     }
     out.flush().unwrap();
+
+    if matches.is_present("write_undefined") {
+        let mut f = BufWriter::new(File::create("undefined.morty").unwrap());
+        for name in &pickle.inst_table {
+            if !pickle.rename_table.contains_key(name) {
+                write!(f, "{} ", name).unwrap();
+            }
+        }
+        writeln!(f).unwrap();
+        f.flush().unwrap();
+    }
 
     Ok(())
 }
