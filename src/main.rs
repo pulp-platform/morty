@@ -18,14 +18,11 @@ use std::convert::TryFrom;
 use std::ffi::OsStr;
 use std::fs::File;
 use std::io;
-use std::io::Write;
-use std::io::{BufReader, BufWriter};
-use std::path::Path;
-use std::path::PathBuf;
+use std::io::{Write, BufReader, BufWriter};
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
-use sv_parser::preprocess;
 use sv_parser::Error as SvParserError;
-use sv_parser::{parse_sv_pp, unwrap_node, Define, DefineText, Locate, RefNode, SyntaxTree};
+use sv_parser::{preprocess, parse_sv_pp, unwrap_node, Define, DefineText, Locate, RefNode, SyntaxTree};
 
 pub mod doc;
 mod printer;
@@ -99,13 +96,15 @@ impl<'a> Pickle<'a> {
         }
     }
 
+    // Load the module with name 'module_name' and append the resulting ParsedFile to 'files'.
+    // This function may recursively load other modules if the library uses another library module.
+    // If no module is found in the library bundle, this function does nothing.
     fn load_library_module(&mut self, module_name: &str, files: &mut Vec<ParsedFile>) {
         if let Ok(pf) = self.libs.load_module(module_name) {
+            // register all declarations from this library file.
             for node in &pf.ast {
                 match node {
-                    // Module declarations.
                     RefNode::ModuleDeclarationAnsi(x) => {
-                        // unwrap_node! gets the nearest ModuleIdentifier from x
                         let id = unwrap_node!(x, SimpleIdentifier).unwrap();
                         self.register_declaration(&pf.ast, id);
                     }
@@ -116,12 +115,15 @@ impl<'a> Pickle<'a> {
                     _ => (),
                 }
             }
+            // look for all module instantiations
             for node in &pf.ast {
                 match node {
                     RefNode::ModuleInstantiation(x) => {
                         let id = unwrap_node!(x, SimpleIdentifier).unwrap();
                         self.register_instantiation(&pf.ast, id.clone());
 
+                        // if this module is undefined, recursively attempt to load a library
+                        // module for it.
                         let (inst_name, _) = get_identifier(&pf.ast, id);
                         info!("Instantiation in library module {}", &inst_name);
                         if !self.rename_table.contains_key(&inst_name) {
@@ -131,6 +133,7 @@ impl<'a> Pickle<'a> {
                     _ => (),
                 }
             }
+            // add the parsed file to the vector.
             files.push(pf);
         }
     }
@@ -299,9 +302,13 @@ fn main() -> Result<()> {
         .map(|x| x.to_string())
         .collect();
 
+    // a hashmap from 'module name' to 'path' for all libraries.
     let mut library_files = HashMap::new();
+    // a list of paths for all library files
     let mut library_paths: Vec<PathBuf> = Vec::new();
 
+    // we first accumulate all library files from the 'library_dir' and 'library_file' options into
+    // a vector of paths, and then construct the library hashmap.
     for dir in matches.values_of("library_dir").into_iter().flatten() {
         for entry in std::fs::read_dir(dir).unwrap() {
             let dir = entry.unwrap();
@@ -315,6 +322,7 @@ fn main() -> Result<()> {
     }
 
     for p in &library_paths {
+        // must have the library extension (.v or .sv).
         if has_libext(p) {
             if let Some(m) = lib_module(p) {
                 library_files.insert(m, p.to_owned());
@@ -371,6 +379,9 @@ fn main() -> Result<()> {
 
     let strip_comments = matches.is_present("strip_comments");
     for bundle in file_list {
+        let bundle_include_dirs: Vec<_> = bundle.include_dirs.iter().map(Path::new).collect();
+        let bundle_defines = defines_to_sv_parser(&bundle.defines);
+
         // For each file in the file bundle preprocess and parse it.
         // Use a neat trick of `collect` here, which allows you to collect a
         // `Result<T>` iterator into a `Result<Vec<T>>`, i.e. bubbling up the
@@ -381,8 +392,8 @@ fn main() -> Result<()> {
             .map(|filename| -> Result<_> {
                 parse_file(
                     &filename,
-                    &bundle.include_dirs,
-                    &bundle.defines,
+                    &bundle_include_dirs,
+                    &bundle_defines,
                     strip_comments,
                 )
             })
@@ -554,6 +565,7 @@ fn main() -> Result<()> {
     Ok(())
 }
 
+// Returns true if this file has a library extension (.v or .sv).
 fn has_libext(p: &Path) -> bool {
     match p.extension().and_then(OsStr::to_str) {
         Some("sv") => true,
@@ -562,21 +574,15 @@ fn has_libext(p: &Path) -> bool {
     }
 }
 
+// Given a library filename, return the module name that this file must contain. Library files
+// must be named as module_name.v or module_name.sv.
 fn lib_module(p: &Path) -> Option<String> {
     p.with_extension("").file_name()?.to_str().map(String::from)
 }
 
-fn parse_file(
-    filename: &str,
-    include_dirs: &Vec<String>,
-    defines: &HashMap<String, Option<String>>,
-    strip_comments: bool,
-) -> Result<ParsedFile> {
-    info!("{:?}", filename);
-
-    let bundle_include_dirs: Vec<_> = include_dirs.iter().map(Path::new).collect();
-    // Convert the preprocessor defines into the appropriate format which is understood by `sv-parser`
-    let bundle_defines: HashMap<_, _> = defines
+// Convert the preprocessor defines into the appropriate format which is understood by `sv-parser`
+fn defines_to_sv_parser(defines: &HashMap<String, Option<String>>) -> HashMap<String, Option<Define>> {
+    return defines
         .iter()
         .map(|(name, value)| {
             // If there is a define text add it.
@@ -590,6 +596,15 @@ fn parse_file(
             )
         })
         .collect();
+}
+
+fn parse_file(
+    filename: &str,
+    bundle_include_dirs: &Vec<&Path>,
+    bundle_defines: &HashMap<String, Option<Define>>,
+    strip_comments: bool,
+) -> Result<ParsedFile> {
+    info!("{:?}", filename);
 
     // Preprocess the verilog files.
     let pp = preprocess(
@@ -648,6 +663,7 @@ struct LibraryBundle {
 
 impl LibraryBundle {
     fn load_module(&self, module_name: &str) -> Result<ParsedFile, Error> {
+        // check if the module is in the hashmap
         let f = match self.files.get(module_name) {
             Some(p) => p.to_string_lossy(),
             None => {
@@ -655,7 +671,11 @@ impl LibraryBundle {
             }
         };
 
-        return parse_file(&f, &self.include_dirs, &self.defines, true);
+        let bundle_include_dirs: Vec<_> = self.include_dirs.iter().map(Path::new).collect();
+        let bundle_defines = defines_to_sv_parser(&self.defines);
+
+        // if so, parse the file and return the result (comments are always stripped).
+        return parse_file(&f, &bundle_include_dirs, &bundle_defines, true);
     }
 }
 
