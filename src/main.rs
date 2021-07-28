@@ -99,7 +99,7 @@ impl<'a> Pickle<'a> {
         }
     }
 
-    fn load_library_module(&mut self, module_name: &str) {
+    fn load_library_module(&mut self, module_name: &str, files: &mut Vec<ParsedFile>) {
         if let Ok(pf) = self.libs.load_module(module_name) {
             for node in &pf.ast {
                 match node {
@@ -125,12 +125,13 @@ impl<'a> Pickle<'a> {
                         let (inst_name, _) = get_identifier(&pf.ast, id);
                         info!("Instantiation in library module {}", &inst_name);
                         if !self.rename_table.contains_key(&inst_name) {
-                            self.load_library_module(&inst_name);
+                            self.load_library_module(&inst_name, files);
                         }
                     }
                     _ => (),
                 }
             }
+            files.push(pf);
         }
     }
 }
@@ -366,7 +367,6 @@ fn main() -> Result<()> {
     };
 
     // Parse the input files.
-    let printer = Arc::new(Mutex::new(printer::Printer::new()));
     let mut syntax_trees = vec![];
 
     let strip_comments = matches.is_present("strip_comments");
@@ -468,11 +468,8 @@ fn main() -> Result<()> {
         }
     }
 
-    // Emit the pickled source files.
+    let mut library_files: Vec<ParsedFile> = vec![];
     for pf in &syntax_trees {
-        // For each file, start with a clean replacement table.
-        pickle.replace_table.clear();
-        // Iterate again and check for usage
         for node in &pf.ast {
             match node {
                 RefNode::ModuleInstantiation(x) => {
@@ -481,10 +478,24 @@ fn main() -> Result<()> {
 
                     let (inst_name, _) = get_identifier(&pf.ast, id);
                     if !pickle.rename_table.contains_key(&inst_name) {
-                        info!("could not find {}", &inst_name);
-                        pickle.load_library_module(&inst_name);
+                        info!("Could not find {}, checking libraries...", &inst_name);
+                        pickle.load_library_module(&inst_name, &mut library_files);
                     }
                 }
+                _ => (),
+            }
+        }
+    }
+
+    syntax_trees.extend(library_files);
+
+    // Emit the pickled source files.
+    for pf in &syntax_trees {
+        // For each file, start with a clean replacement table.
+        pickle.replace_table.clear();
+        // Iterate again and check for usage
+        for node in &pf.ast {
+            match node {
                 // Instantiations, end-labels.
                 RefNode::ModuleIdentifier(x) => {
                     let id = unwrap_node!(x, SimpleIdentifier).unwrap();
@@ -594,8 +605,9 @@ fn parse_file(
     let buffer = pp.0.text().to_string();
     let syntax_tree = parse_sv_pp(pp.0, pp.1, false)
         .or_else(|err| -> Result<_> {
-            // let mut printer = &mut *printer.lock().unwrap();
-            // print_parse_error(&mut printer, &err, false)?;
+            let printer = Arc::new(Mutex::new(printer::Printer::new()));
+            let mut printer = &mut *printer.lock().unwrap();
+            print_parse_error(&mut printer, &err, false)?;
             Err(Error::new(err))
         })?
         .0;
