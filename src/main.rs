@@ -7,7 +7,7 @@
 #[macro_use]
 extern crate log;
 
-use anyhow::{Context as _, Error, Result};
+use anyhow::{anyhow, Context as _, Error, Result};
 use clap::{App, Arg};
 use log::LevelFilter;
 use rayon::prelude::*;
@@ -15,14 +15,14 @@ use serde::{Deserialize, Serialize};
 use simple_logger::SimpleLogger;
 use std::collections::{HashMap, HashSet};
 use std::convert::TryFrom;
+use std::ffi::OsStr;
 use std::fs::File;
-use std::path::Path;
 use std::io;
 use std::io::Write;
 use std::io::{BufReader, BufWriter};
+use std::path::Path;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
-use std::ffi::OsStr;
 use sv_parser::preprocess;
 use sv_parser::Error as SvParserError;
 use sv_parser::{parse_sv_pp, unwrap_node, Define, DefineText, Locate, RefNode, SyntaxTree};
@@ -48,6 +48,8 @@ struct Pickle<'a> {
     replace_table: Vec<(usize, usize, String)>,
     /// A set of instantiated modules.
     inst_table: HashSet<String>,
+    /// Information for library files
+    libs: LibraryBundle,
 }
 
 impl<'a> Pickle<'a> {
@@ -94,6 +96,41 @@ impl<'a> Pickle<'a> {
             debug!("Exclude `{}`: {:?}", inst_name, loc);
             self.replace_table
                 .push((locate.offset, locate.len, "".to_string()));
+        }
+    }
+
+    fn load_library_module(&mut self, module_name: &str) {
+        if let Ok(pf) = self.libs.load_module(module_name) {
+            for node in &pf.ast {
+                match node {
+                    // Module declarations.
+                    RefNode::ModuleDeclarationAnsi(x) => {
+                        // unwrap_node! gets the nearest ModuleIdentifier from x
+                        let id = unwrap_node!(x, SimpleIdentifier).unwrap();
+                        self.register_declaration(&pf.ast, id);
+                    }
+                    RefNode::ModuleDeclarationNonansi(x) => {
+                        let id = unwrap_node!(x, SimpleIdentifier).unwrap();
+                        self.register_declaration(&pf.ast, id);
+                    }
+                    _ => (),
+                }
+            }
+            for node in &pf.ast {
+                match node {
+                    RefNode::ModuleInstantiation(x) => {
+                        let id = unwrap_node!(x, SimpleIdentifier).unwrap();
+                        self.register_instantiation(&pf.ast, id.clone());
+
+                        let (inst_name, _) = get_identifier(&pf.ast, id);
+                        info!("Instantiation in library module {}", &inst_name);
+                        if !self.rename_table.contains_key(&inst_name) {
+                            self.load_library_module(&inst_name);
+                        }
+                    }
+                    _ => (),
+                }
+            }
         }
     }
 }
@@ -325,6 +362,7 @@ fn main() -> Result<()> {
         rename_table: HashMap::new(),
         replace_table: vec![],
         inst_table: HashSet::new(),
+        libs: library_bundle,
     };
 
     // Parse the input files.
@@ -359,32 +397,12 @@ fn main() -> Result<()> {
             .files
             .par_iter()
             .map(|filename| -> Result<_> {
-                info!("{:?}", filename);
-
-                // Preprocess the verilog files.
-                let pp = preprocess(
-                    filename,
-                    &bundle_defines,
+                parse_file(
+                    &filename,
                     &bundle_include_dirs,
+                    &bundle_defines,
                     strip_comments,
-                    false,
                 )
-                .with_context(|| format!("Failed to preprocess `{}`", filename))?;
-
-                let buffer = pp.0.text().to_string();
-                let syntax_tree = parse_sv_pp(pp.0, pp.1, false)
-                    .or_else(|err| -> Result<_> {
-                        let mut printer = &mut *printer.lock().unwrap();
-                        print_parse_error(&mut printer, &err, false)?;
-                        Err(Error::new(err))
-                    })?
-                    .0;
-
-                Ok(ParsedFile {
-                    path: filename.clone(),
-                    source: buffer,
-                    ast: syntax_tree,
-                })
             })
             .collect();
         syntax_trees.extend(v?);
@@ -459,7 +477,13 @@ fn main() -> Result<()> {
             match node {
                 RefNode::ModuleInstantiation(x) => {
                     let id = unwrap_node!(x, SimpleIdentifier).unwrap();
-                    pickle.register_instantiation(&pf.ast, id);
+                    pickle.register_instantiation(&pf.ast, id.clone());
+
+                    let (inst_name, _) = get_identifier(&pf.ast, id);
+                    if !pickle.rename_table.contains_key(&inst_name) {
+                        info!("could not find {}", &inst_name);
+                        pickle.load_library_module(&inst_name);
+                    }
                 }
                 // Instantiations, end-labels.
                 RefNode::ModuleIdentifier(x) => {
@@ -549,6 +573,40 @@ fn lib_module(p: &Path) -> Option<String> {
     p.with_extension("").file_name()?.to_str().map(String::from)
 }
 
+fn parse_file(
+    filename: &str,
+    bundle_include_dirs: &Vec<&Path>,
+    bundle_defines: &HashMap<String, Option<Define>>,
+    strip_comments: bool,
+) -> Result<ParsedFile> {
+    info!("{:?}", filename);
+
+    // Preprocess the verilog files.
+    let pp = preprocess(
+        filename,
+        &bundle_defines,
+        &bundle_include_dirs,
+        strip_comments,
+        false,
+    )
+    .with_context(|| format!("Failed to preprocess `{}`", filename))?;
+
+    let buffer = pp.0.text().to_string();
+    let syntax_tree = parse_sv_pp(pp.0, pp.1, false)
+        .or_else(|err| -> Result<_> {
+            // let mut printer = &mut *printer.lock().unwrap();
+            // print_parse_error(&mut printer, &err, false)?;
+            Err(Error::new(err))
+        })?
+        .0;
+
+    Ok(ParsedFile {
+        path: String::from(filename),
+        source: buffer,
+        ast: syntax_tree,
+    })
+}
+
 fn get_identifier(st: &SyntaxTree, node: RefNode) -> (String, Locate) {
     // unwrap_node! can take multiple types
     match unwrap_node!(node, SimpleIdentifier, EscapedIdentifier) {
@@ -570,10 +628,42 @@ struct FileBundle {
     files: Vec<String>,
 }
 
+#[derive(Serialize, Deserialize, Debug)]
 struct LibraryBundle {
     include_dirs: Vec<String>,
     defines: HashMap<String, Option<String>>,
     files: HashMap<String, PathBuf>,
+}
+
+impl LibraryBundle {
+    fn load_module(&self, module_name: &str) -> Result<ParsedFile, Error> {
+        let f = match self.files.get(module_name) {
+            Some(p) => p.to_string_lossy(),
+            None => {
+                return Err(anyhow!("module {} not found in libraries", module_name));
+            }
+        };
+
+        let bundle_include_dirs: Vec<_> = self.include_dirs.iter().map(Path::new).collect();
+        // Convert the preprocessor defines into the appropriate format which is understood by `sv-parser`
+        let bundle_defines: HashMap<_, _> = self
+            .defines
+            .iter()
+            .map(|(name, value)| {
+                // If there is a define text add it.
+                let define_text = match value {
+                    Some(x) => Some(DefineText::new(String::from(x), None)),
+                    None => None,
+                };
+                (
+                    name.clone(),
+                    Some(Define::new(name.clone(), vec![], define_text)),
+                )
+            })
+            .collect();
+
+        return parse_file(&f, &bundle_include_dirs, &bundle_defines, true);
+    }
 }
 
 /// A parsed input file.
