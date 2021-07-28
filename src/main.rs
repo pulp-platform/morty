@@ -18,11 +18,13 @@ use std::convert::TryFrom;
 use std::ffi::OsStr;
 use std::fs::File;
 use std::io;
-use std::io::{Write, BufReader, BufWriter};
+use std::io::{BufReader, BufWriter, Write};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use sv_parser::Error as SvParserError;
-use sv_parser::{preprocess, parse_sv_pp, unwrap_node, Define, DefineText, Locate, RefNode, SyntaxTree};
+use sv_parser::{
+    parse_sv_pp, preprocess, unwrap_node, Define, DefineText, Locate, RefNode, SyntaxTree,
+};
 
 pub mod doc;
 mod printer;
@@ -125,7 +127,10 @@ impl<'a> Pickle<'a> {
                         // if this module is undefined, recursively attempt to load a library
                         // module for it.
                         let (inst_name, _) = get_identifier(&pf.ast, id);
-                        info!("Instantiation `{}` in library module `{}`", &inst_name, &module_name);
+                        info!(
+                            "Instantiation `{}` in library module `{}`",
+                            &inst_name, &module_name
+                        );
                         if !self.rename_table.contains_key(&inst_name) {
                             self.load_library_module(&inst_name, files);
                         }
@@ -581,7 +586,9 @@ fn lib_module(p: &Path) -> Option<String> {
 }
 
 // Convert the preprocessor defines into the appropriate format which is understood by `sv-parser`
-fn defines_to_sv_parser(defines: &HashMap<String, Option<String>>) -> HashMap<String, Option<Define>> {
+fn defines_to_sv_parser(
+    defines: &HashMap<String, Option<String>>,
+) -> HashMap<String, Option<Define>> {
     return defines
         .iter()
         .map(|(name, value)| {
