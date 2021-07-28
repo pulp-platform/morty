@@ -16,11 +16,13 @@ use simple_logger::SimpleLogger;
 use std::collections::{HashMap, HashSet};
 use std::convert::TryFrom;
 use std::fs::File;
+use std::path::Path;
 use std::io;
 use std::io::Write;
 use std::io::{BufReader, BufWriter};
-use std::path::Path;
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
+use std::ffi::OsStr;
 use sv_parser::preprocess;
 use sv_parser::Error as SvParserError;
 use sv_parser::{parse_sv_pp, unwrap_node, Define, DefineText, Locate, RefNode, SyntaxTree};
@@ -204,6 +206,24 @@ fn main() -> Result<()> {
                 .long("write-undefined")
                 .help("Output a list of undefined modules to `undefined.morty`"),
         )
+        .arg(
+            Arg::with_name("library_file")
+                .long("library-file")
+                .help("File to search for SystemVerilog modules")
+                .value_name("FILE")
+                .takes_value(true)
+                .multiple(true)
+                .number_of_values(1),
+        )
+        .arg(
+            Arg::with_name("library_dir")
+                .long("library-dir")
+                .help("Directory to search for SystemVerilog modules")
+                .value_name("DIR")
+                .takes_value(true)
+                .multiple(true)
+                .number_of_values(1),
+        )
         .get_matches();
 
     // Instantiate a new logger with the verbosity level the user requested.
@@ -240,6 +260,35 @@ fn main() -> Result<()> {
         .flatten()
         .map(|x| x.to_string())
         .collect();
+
+    let mut library_files = HashMap::new();
+    let mut library_paths: Vec<PathBuf> = Vec::new();
+
+    for dir in matches.values_of("library_dir").into_iter().flatten() {
+        for entry in std::fs::read_dir(dir).unwrap() {
+            let dir = entry.unwrap();
+            library_paths.push(dir.path());
+        }
+    }
+
+    if let Some(library_names) = matches.values_of("library_file") {
+        let files = library_names.map(PathBuf::from).collect();
+        library_paths.push(files);
+    }
+
+    for p in &library_paths {
+        if has_libext(p) {
+            if let Some(m) = lib_module(p) {
+                library_files.insert(m, p.to_owned());
+            }
+        }
+    }
+
+    let library_bundle = LibraryBundle {
+        include_dirs: include_dirs.clone(),
+        defines: defines.clone(),
+        files: library_files,
+    };
 
     for path in matches.values_of("file_list").into_iter().flatten() {
         let file = File::open(path).unwrap();
@@ -488,6 +537,18 @@ fn main() -> Result<()> {
     Ok(())
 }
 
+fn has_libext(p: &Path) -> bool {
+    match p.extension().and_then(OsStr::to_str) {
+        Some("sv") => true,
+        Some("v") => true,
+        _ => false,
+    }
+}
+
+fn lib_module(p: &Path) -> Option<String> {
+    p.with_extension("").file_name()?.to_str().map(String::from)
+}
+
 fn get_identifier(st: &SyntaxTree, node: RefNode) -> (String, Locate) {
     // unwrap_node! can take multiple types
     match unwrap_node!(node, SimpleIdentifier, EscapedIdentifier) {
@@ -507,6 +568,12 @@ struct FileBundle {
     include_dirs: Vec<String>,
     defines: HashMap<String, Option<String>>,
     files: Vec<String>,
+}
+
+struct LibraryBundle {
+    include_dirs: Vec<String>,
+    defines: HashMap<String, Option<String>>,
+    files: HashMap<String, PathBuf>,
 }
 
 /// A parsed input file.
