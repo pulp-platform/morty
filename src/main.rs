@@ -371,24 +371,6 @@ fn main() -> Result<()> {
 
     let strip_comments = matches.is_present("strip_comments");
     for bundle in file_list {
-        let bundle_include_dirs: Vec<_> = bundle.include_dirs.iter().map(Path::new).collect();
-        // Convert the preprocessor defines into the appropriate format which is understood by `sv-parser`
-        let bundle_defines: HashMap<_, _> = bundle
-            .defines
-            .iter()
-            .map(|(name, value)| {
-                // If there is a define text add it.
-                let define_text = match value {
-                    Some(x) => Some(DefineText::new(String::from(x), None)),
-                    None => None,
-                };
-                (
-                    name.clone(),
-                    Some(Define::new(name.clone(), vec![], define_text)),
-                )
-            })
-            .collect();
-
         // For each file in the file bundle preprocess and parse it.
         // Use a neat trick of `collect` here, which allows you to collect a
         // `Result<T>` iterator into a `Result<Vec<T>>`, i.e. bubbling up the
@@ -399,8 +381,8 @@ fn main() -> Result<()> {
             .map(|filename| -> Result<_> {
                 parse_file(
                     &filename,
-                    &bundle_include_dirs,
-                    &bundle_defines,
+                    &bundle.include_dirs,
+                    &bundle.defines,
                     strip_comments,
                 )
             })
@@ -586,11 +568,28 @@ fn lib_module(p: &Path) -> Option<String> {
 
 fn parse_file(
     filename: &str,
-    bundle_include_dirs: &Vec<&Path>,
-    bundle_defines: &HashMap<String, Option<Define>>,
+    include_dirs: &Vec<String>,
+    defines: &HashMap<String, Option<String>>,
     strip_comments: bool,
 ) -> Result<ParsedFile> {
     info!("{:?}", filename);
+
+    let bundle_include_dirs: Vec<_> = include_dirs.iter().map(Path::new).collect();
+    // Convert the preprocessor defines into the appropriate format which is understood by `sv-parser`
+    let bundle_defines: HashMap<_, _> = defines
+        .iter()
+        .map(|(name, value)| {
+            // If there is a define text add it.
+            let define_text = match value {
+                Some(x) => Some(DefineText::new(String::from(x), None)),
+                None => None,
+            };
+            (
+                name.clone(),
+                Some(Define::new(name.clone(), vec![], define_text)),
+            )
+        })
+        .collect();
 
     // Preprocess the verilog files.
     let pp = preprocess(
@@ -656,25 +655,7 @@ impl LibraryBundle {
             }
         };
 
-        let bundle_include_dirs: Vec<_> = self.include_dirs.iter().map(Path::new).collect();
-        // Convert the preprocessor defines into the appropriate format which is understood by `sv-parser`
-        let bundle_defines: HashMap<_, _> = self
-            .defines
-            .iter()
-            .map(|(name, value)| {
-                // If there is a define text add it.
-                let define_text = match value {
-                    Some(x) => Some(DefineText::new(String::from(x), None)),
-                    None => None,
-                };
-                (
-                    name.clone(),
-                    Some(Define::new(name.clone(), vec![], define_text)),
-                )
-            })
-            .collect();
-
-        return parse_file(&f, &bundle_include_dirs, &bundle_defines, true);
+        return parse_file(&f, &self.include_dirs, &self.defines, true);
     }
 }
 
