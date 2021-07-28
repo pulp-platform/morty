@@ -125,7 +125,7 @@ impl<'a> Pickle<'a> {
                         // if this module is undefined, recursively attempt to load a library
                         // module for it.
                         let (inst_name, _) = get_identifier(&pf.ast, id);
-                        info!("Instantiation in library module {}", &inst_name);
+                        info!("Instantiation `{}` in library module `{}`", &inst_name, &module_name);
                         if !self.rename_table.contains_key(&inst_name) {
                             self.load_library_module(&inst_name, files);
                         }
