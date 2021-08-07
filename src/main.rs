@@ -49,6 +49,8 @@ struct Pickle<'a> {
     inst_table: HashSet<String>,
     /// Information for library files
     libs: LibraryBundle,
+    /// List of library files used during parsing.
+    used_libs: Vec<String>,
 }
 
 impl<'a> Pickle<'a> {
@@ -102,44 +104,49 @@ impl<'a> Pickle<'a> {
     // This function may recursively load other modules if the library uses another library module.
     // If no module is found in the library bundle, this function does nothing.
     fn load_library_module(&mut self, module_name: &str, files: &mut Vec<ParsedFile>) {
-        if let Ok(pf) = self.libs.load_module(module_name) {
-            // register all declarations from this library file.
-            for node in &pf.ast {
-                match node {
-                    RefNode::ModuleDeclarationAnsi(x) => {
-                        let id = unwrap_node!(x, SimpleIdentifier).unwrap();
-                        self.register_declaration(&pf.ast, id);
-                    }
-                    RefNode::ModuleDeclarationNonansi(x) => {
-                        let id = unwrap_node!(x, SimpleIdentifier).unwrap();
-                        self.register_declaration(&pf.ast, id);
-                    }
-                    _ => (),
-                }
-            }
-            // look for all module instantiations
-            for node in &pf.ast {
-                match node {
-                    RefNode::ModuleInstantiation(x) => {
-                        let id = unwrap_node!(x, SimpleIdentifier).unwrap();
-                        self.register_instantiation(&pf.ast, id.clone());
-
-                        // if this module is undefined, recursively attempt to load a library
-                        // module for it.
-                        let (inst_name, _) = get_identifier(&pf.ast, id);
-                        info!(
-                            "Instantiation `{}` in library module `{}`",
-                            &inst_name, &module_name
-                        );
-                        if !self.rename_table.contains_key(&inst_name) {
-                            self.load_library_module(&inst_name, files);
+        let rm = self.libs.load_module(module_name, &mut self.used_libs);
+        match rm {
+            Ok(pf) => {
+                // register all declarations from this library file.
+                for node in &pf.ast {
+                    match node {
+                        RefNode::ModuleDeclarationAnsi(x) => {
+                            let id = unwrap_node!(x, SimpleIdentifier).unwrap();
+                            self.register_declaration(&pf.ast, id);
                         }
+                        RefNode::ModuleDeclarationNonansi(x) => {
+                            let id = unwrap_node!(x, SimpleIdentifier).unwrap();
+                            self.register_declaration(&pf.ast, id);
+                        }
+                        _ => (),
                     }
-                    _ => (),
                 }
-            }
-            // add the parsed file to the vector.
-            files.push(pf);
+                // look for all module instantiations
+                for node in &pf.ast {
+                    match node {
+                        RefNode::ModuleInstantiation(x) => {
+                            let id = unwrap_node!(x, SimpleIdentifier).unwrap();
+                            self.register_instantiation(&pf.ast, id.clone());
+
+                            // if this module is undefined, recursively attempt to load a library
+                            // module for it.
+                            let (inst_name, _) = get_identifier(&pf.ast, id);
+                            info!(
+                                "Instantiation `{}` in library module `{}`",
+                                &inst_name, &module_name
+                            );
+                            if !self.rename_table.contains_key(&inst_name) {
+                                info!("load library module {}", &inst_name);
+                                self.load_library_module(&inst_name, files);
+                            }
+                        }
+                        _ => (),
+                    }
+                }
+                // add the parsed file to the vector.
+                files.push(pf);
+            },
+            Err(e) => info!("error loading library: {}", e)
         }
     }
 }
@@ -248,11 +255,6 @@ fn main() -> Result<()> {
                 .takes_value(true),
         )
         .arg(
-            Arg::with_name("write_undefined")
-                .long("write-undefined")
-                .help("Output a list of undefined modules to `undefined.morty`"),
-        )
-        .arg(
             Arg::with_name("library_file")
                 .long("library-file")
                 .help("File to search for SystemVerilog modules")
@@ -263,12 +265,20 @@ fn main() -> Result<()> {
         )
         .arg(
             Arg::with_name("library_dir")
+                .short("y")
                 .long("library-dir")
                 .help("Directory to search for SystemVerilog modules")
                 .value_name("DIR")
                 .takes_value(true)
                 .multiple(true)
                 .number_of_values(1),
+        )
+        .arg(
+            Arg::with_name("manifest")
+                .long("manifest")
+                .value_name("FILE")
+                .help("Output a JSON-encoded source information manifest to FILE")
+                .takes_value(true),
         )
         .get_matches();
 
@@ -356,8 +366,8 @@ fn main() -> Result<()> {
 
     if let Some(file_names) = matches.values_of("INPUT") {
         file_list.push(FileBundle {
-            include_dirs,
-            defines,
+            include_dirs: include_dirs.clone(),
+            defines: defines.clone(),
             files: file_names.map(String::from).collect(),
         });
     }
@@ -377,13 +387,14 @@ fn main() -> Result<()> {
         replace_table: vec![],
         inst_table: HashSet::new(),
         libs: library_bundle,
+        used_libs: vec![],
     };
 
     // Parse the input files.
     let mut syntax_trees = vec![];
 
     let strip_comments = matches.is_present("strip_comments");
-    for bundle in file_list {
+    for bundle in &file_list {
         let bundle_include_dirs: Vec<_> = bundle.include_dirs.iter().map(Path::new).collect();
         let bundle_defines = defines_to_sv_parser(&bundle.defines);
 
@@ -421,7 +432,6 @@ fn main() -> Result<()> {
             eprintln!("{}:", pf.path);
             writeln!(out, "{:}", pf.source).unwrap();
         }
-        out.flush().unwrap();
         return Ok(());
     }
 
@@ -554,17 +564,46 @@ fn main() -> Result<()> {
             writeln!(out).unwrap();
         }
     }
-    out.flush().unwrap();
 
-    if matches.is_present("write_undefined") {
-        let mut f = BufWriter::new(File::create("undefined.morty").unwrap());
+    // if the user requested a manifest we need to compute the information and output it in json
+    // form
+    if let Some(manifest_file) = matches.value_of("manifest") {
+        let mut undef_modules = Vec::new();
+
+        // find undefined modules
         for name in &pickle.inst_table {
             if !pickle.rename_table.contains_key(name) {
-                write!(f, "{} ", name).unwrap();
+                undef_modules.push(name.to_string());
             }
         }
-        writeln!(f).unwrap();
-        f.flush().unwrap();
+
+        let mut top_modules = Vec::new();
+
+        // find top modules
+        for (_old_name, new_name) in &pickle.rename_table {
+            if !pickle.inst_table.contains(new_name) {
+                top_modules.push(new_name.to_string());
+            }
+        }
+
+        // bundle the library files that were used
+        let lib_bundle = FileBundle{
+            include_dirs: include_dirs.clone(),
+            defines: defines.clone(),
+            files: pickle.used_libs.clone(),
+        };
+
+        file_list.push(lib_bundle);
+
+        let json = serde_json::to_string_pretty(&Manifest{
+            files: file_list,
+            tops: top_modules,
+            undefined: undef_modules,
+        }).unwrap();
+
+        let path = Path::new(manifest_file);
+        let mut out = Box::new(BufWriter::new(File::create(&path).unwrap())) as Box<dyn Write>;
+        writeln!(out, "{}", json).unwrap();
     }
 
     Ok(())
@@ -655,6 +694,16 @@ fn get_identifier(st: &SyntaxTree, node: RefNode) -> (String, Locate) {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
+struct Manifest {
+    // list of file bundles
+    files: Vec<FileBundle>,
+    // list of top modules
+    tops: Vec<String>,
+    // list of undefined modules
+    undefined: Vec<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
 struct FileBundle {
     include_dirs: Vec<String>,
     defines: HashMap<String, Option<String>>,
@@ -669,7 +718,7 @@ struct LibraryBundle {
 }
 
 impl LibraryBundle {
-    fn load_module(&self, module_name: &str) -> Result<ParsedFile, Error> {
+    fn load_module(&self, module_name: &str, files: &mut Vec<String>) -> Result<ParsedFile, Error> {
         // check if the module is in the hashmap
         let f = match self.files.get(module_name) {
             Some(p) => p.to_string_lossy(),
@@ -680,6 +729,8 @@ impl LibraryBundle {
 
         let bundle_include_dirs: Vec<_> = self.include_dirs.iter().map(Path::new).collect();
         let bundle_defines = defines_to_sv_parser(&self.defines);
+
+        files.push(f.to_string());
 
         // if so, parse the file and return the result (comments are always stripped).
         return parse_file(&f, &bundle_include_dirs, &bundle_defines, true);
