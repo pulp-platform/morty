@@ -145,8 +145,8 @@ impl<'a> Pickle<'a> {
                 }
                 // add the parsed file to the vector.
                 files.push(pf);
-            },
-            Err(e) => info!("error loading library: {}", e)
+            }
+            Err(e) => info!("error loading library: {}", e),
         }
     }
 }
@@ -596,17 +596,18 @@ fn main() -> Result<()> {
             }
         }
         base_files.extend(pickle.used_libs.clone());
-        bundles.push(FileBundle{
+        bundles.push(FileBundle {
             include_dirs: include_dirs.clone(),
             defines: defines.clone(),
             files: base_files,
         });
 
-        let json = serde_json::to_string_pretty(&Manifest{
+        let json = serde_json::to_string_pretty(&Manifest {
             sources: bundles,
             tops: top_modules,
             undefined: undef_modules,
-        }).unwrap();
+        })
+        .unwrap();
 
         let path = Path::new(manifest_file);
         let mut out = Box::new(BufWriter::new(File::create(&path).unwrap())) as Box<dyn Write>;
