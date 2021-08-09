@@ -603,7 +603,7 @@ fn main() -> Result<()> {
         });
 
         let json = serde_json::to_string_pretty(&Manifest{
-            files: bundles,
+            sources: bundles,
             tops: top_modules,
             undefined: undef_modules,
         }).unwrap();
@@ -703,7 +703,7 @@ fn get_identifier(st: &SyntaxTree, node: RefNode) -> (String, Locate) {
 #[derive(Serialize, Deserialize, Debug)]
 struct Manifest {
     // list of file bundles
-    files: Vec<FileBundle>,
+    sources: Vec<FileBundle>,
     // list of top modules
     tops: Vec<String>,
     // list of undefined modules
