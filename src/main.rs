@@ -586,17 +586,24 @@ fn main() -> Result<()> {
             }
         }
 
-        // bundle the library files that were used
-        let lib_bundle = FileBundle{
+        let mut base_files = Vec::new();
+        let mut bundles = Vec::new();
+        for bundle in file_list {
+            if bundle.include_dirs == include_dirs && bundle.defines == defines {
+                base_files.extend(bundle.files.clone());
+            } else {
+                bundles.push(bundle);
+            }
+        }
+        base_files.extend(pickle.used_libs.clone());
+        bundles.push(FileBundle{
             include_dirs: include_dirs.clone(),
             defines: defines.clone(),
-            files: pickle.used_libs.clone(),
-        };
-
-        file_list.push(lib_bundle);
+            files: base_files,
+        });
 
         let json = serde_json::to_string_pretty(&Manifest{
-            files: file_list,
+            files: bundles,
             tops: top_modules,
             undefined: undef_modules,
         }).unwrap();
