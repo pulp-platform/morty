@@ -10,7 +10,6 @@ extern crate log;
 use anyhow::{anyhow, Context as _, Error, Result};
 use clap::{App, Arg};
 use log::LevelFilter;
-use std::process;
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use simple_logger::SimpleLogger;
@@ -21,6 +20,7 @@ use std::fs::File;
 use std::io;
 use std::io::{BufReader, BufWriter, Write};
 use std::path::{Path, PathBuf};
+use std::process;
 use std::sync::{Arc, Mutex};
 use sv_parser::Error as SvParserError;
 use sv_parser::{
