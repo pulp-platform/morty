@@ -10,6 +10,7 @@ extern crate log;
 use anyhow::{anyhow, Context as _, Error, Result};
 use clap::{App, Arg};
 use log::LevelFilter;
+use std::process;
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use simple_logger::SimpleLogger;
@@ -315,7 +316,10 @@ fn main() -> Result<()> {
     // we first accumulate all library files from the 'library_dir' and 'library_file' options into
     // a vector of paths, and then construct the library hashmap.
     for dir in matches.values_of("library_dir").into_iter().flatten() {
-        for entry in std::fs::read_dir(dir).unwrap() {
+        for entry in std::fs::read_dir(dir).unwrap_or_else(|e| {
+            eprintln!("error accessing library directory `{}`: {}", dir, e);
+            process::exit(1)
+        }) {
             let dir = entry.unwrap();
             library_paths.push(dir.path());
         }
@@ -342,11 +346,17 @@ fn main() -> Result<()> {
     };
 
     for path in matches.values_of("file_list").into_iter().flatten() {
-        let file = File::open(path).unwrap();
+        let file = File::open(path).unwrap_or_else(|e| {
+            eprintln!("error opening `{}`: {}", path, e);
+            process::exit(1)
+        });
         let reader = BufReader::new(file);
 
         // Read the JSON contents of the file as an instance of `User`.
-        let mut u: Vec<FileBundle> = serde_json::from_reader(reader).unwrap();
+        let mut u: Vec<FileBundle> = serde_json::from_reader(reader).unwrap_or_else(|e| {
+            eprintln!("error parsing json in `{}`: {}", path, e);
+            process::exit(1)
+        });
         for fb in &mut u {
             fb.defines.extend(defines.clone());
             fb.include_dirs.extend(include_dirs.clone());
@@ -410,7 +420,10 @@ fn main() -> Result<()> {
         Some(file) => {
             info!("Setting output to `{}`", file);
             let path = Path::new(file);
-            Box::new(BufWriter::new(File::create(&path).unwrap())) as Box<dyn Write>
+            Box::new(BufWriter::new(File::create(&path).unwrap_or_else(|e| {
+                eprintln!("could not create `{}`: {}", file, e);
+                process::exit(1);
+            }))) as Box<dyn Write>
         }
         None => Box::new(io::stdout()) as Box<dyn Write>,
     };
