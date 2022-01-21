@@ -1,6 +1,6 @@
 [package]
 name = "morty"
-version = "0.5.2-dev"
+version = "0.6.0"
 description = "A SystemVerilog source file pickler."
 authors = ["Florian Zaruba <zarubaf@iis.ee.ethz.ch>", "Fabian Schuiki <fschuiki@iis.ee.ethz.ch>"]
 edition = "2018"
