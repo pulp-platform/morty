@@ -467,21 +467,21 @@ fn main() -> Result<()> {
                 // Module declarations.
                 RefNode::ModuleDeclarationAnsi(x) => {
                     // unwrap_node! gets the nearest ModuleIdentifier from x
-                    let id = unwrap_node!(x, SimpleIdentifier).unwrap();
+                    let id = unwrap_node!(x, ModuleIdentifier).unwrap();
                     pickle.register_declaration(&pf.ast, id);
                 }
                 RefNode::ModuleDeclarationNonansi(x) => {
-                    let id = unwrap_node!(x, SimpleIdentifier).unwrap();
+                    let id = unwrap_node!(x, ModuleIdentifier).unwrap();
                     pickle.register_declaration(&pf.ast, id);
                 }
                 // Interface Declaration.
                 RefNode::InterfaceDeclaration(x) => {
-                    let id = unwrap_node!(x, SimpleIdentifier).unwrap();
+                    let id = unwrap_node!(x, InterfaceIdentifier).unwrap();
                     pickle.register_declaration(&pf.ast, id);
                 }
                 // Package declarations.
                 RefNode::PackageDeclaration(x) => {
-                    let id = unwrap_node!(x, SimpleIdentifier).unwrap();
+                    let id = unwrap_node!(x, PackageIdentifier).unwrap();
                     pickle.register_declaration(&pf.ast, id);
                 }
                 _ => (),
