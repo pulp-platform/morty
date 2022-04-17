@@ -8,7 +8,7 @@
 extern crate log;
 
 use anyhow::{anyhow, Context as _, Error, Result};
-use clap::{App, Arg};
+use clap::{Arg, Command};
 use log::LevelFilter;
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -153,129 +153,122 @@ impl<'a> Pickle<'a> {
 }
 
 fn main() -> Result<()> {
-    let matches = App::new(env!("CARGO_PKG_NAME"))
+    let matches = Command::new(env!("CARGO_PKG_NAME"))
         .version(clap::crate_version!())
         .author(clap::crate_authors!())
         .about(clap::crate_description!())
         .arg(
-            Arg::with_name("inc")
-                .short("I")
+            Arg::new("inc")
+                .short('I')
                 .value_name("DIR")
                 .help("Add a search path for SystemVerilog includes")
-                .multiple(true)
-                .takes_value(true)
-                .number_of_values(1),
+                .multiple_occurrences(true)
+                .takes_value(true),
         )
         .arg(
-            Arg::with_name("exclude_rename")
-                .short("e")
+            Arg::new("exclude_rename")
+                .short('e')
                 .long("exclude-rename")
                 .value_name("MODULE|INTERFACE|PACKAGE")
                 .help("Add module, interface, package which should not be renamed")
-                .multiple(true)
-                .takes_value(true)
-                .number_of_values(1),
+                .multiple_occurrences(true)
+                .takes_value(true),
         )
         .arg(
-            Arg::with_name("exclude")
+            Arg::new("exclude")
                 .long("exclude")
                 .value_name("MODULE|INTERFACE|PACKAGE")
                 .help("Do not include module, interface, package in the pickled file list")
-                .multiple(true)
-                .takes_value(true)
-                .number_of_values(1),
+                .multiple_occurrences(true)
+                .takes_value(true),
         )
         .arg(
-            Arg::with_name("v")
-                .short("v")
-                .multiple(true)
+            Arg::new("v")
+                .short('v')
+                .multiple_occurrences(true)
                 .help("Sets the level of verbosity"),
         )
         .arg(
-            Arg::with_name("prefix")
-                .short("p")
+            Arg::new("prefix")
+                .short('p')
                 .long("prefix")
                 .value_name("PREFIX")
                 .help("Prepend a name to all global names")
                 .takes_value(true),
         )
         .arg(
-            Arg::with_name("def")
-                .short("D")
+            Arg::new("def")
+                .short('D')
                 .value_name("DEFINE")
                 .help("Define a preprocesor macro")
-                .multiple(true)
-                .takes_value(true)
-                .number_of_values(1),
+                .multiple_occurrences(true)
+                .takes_value(true),
         )
         .arg(
-            Arg::with_name("suffix")
-                .short("s")
+            Arg::new("suffix")
+                .short('s')
                 .long("suffix")
                 .value_name("SUFFIX")
                 .help("Append a name to all global names")
                 .takes_value(true),
         )
         .arg(
-            Arg::with_name("preproc")
-                .short("E")
+            Arg::new("preproc")
+                .short('E')
                 .help("Write preprocessed input files to stdout"),
         )
         .arg(
-            Arg::with_name("file_list")
-                .short("f")
+            Arg::new("file_list")
+                .short('f')
                 .value_name("LIST")
                 .help("Gather files from a manifest")
-                .multiple(true)
-                .takes_value(true)
-                .number_of_values(1),
+                .multiple_occurrences(true)
+                .takes_value(true),
         )
         .arg(
-            Arg::with_name("strip_comments")
+            Arg::new("strip_comments")
                 .long("strip-comments")
                 .help("Strip comments from the output"),
         )
         .arg(
-            Arg::with_name("INPUT")
+            Arg::new("INPUT")
                 .help("The input files to compile")
-                .multiple(true),
+                .multiple_occurrences(true),
         )
         .arg(
-            Arg::with_name("docdir")
-                .short("d")
+            Arg::new("docdir")
+                .short('d')
                 .long("doc")
                 .value_name("OUTDIR")
                 .help("Generate documentation in a directory")
                 .takes_value(true),
         )
         .arg(
-            Arg::with_name("output")
-                .short("o")
+            Arg::new("output")
+                .short('o')
                 .value_name("FILE")
                 .help("Write output to file")
                 .takes_value(true),
         )
         .arg(
-            Arg::with_name("library_file")
+            Arg::new("library_file")
                 .long("library-file")
                 .help("File to search for SystemVerilog modules")
                 .value_name("FILE")
                 .takes_value(true)
-                .multiple(true)
-                .number_of_values(1),
+                .multiple_occurrences(true),
         )
         .arg(
-            Arg::with_name("library_dir")
-                .short("y")
+            Arg::new("library_dir")
+                .short('y')
                 .long("library-dir")
                 .help("Directory to search for SystemVerilog modules")
                 .value_name("DIR")
                 .takes_value(true)
-                .multiple(true)
-                .number_of_values(1),
+                .multiple_occurrences(true),
         )
         .arg(
-            Arg::with_name("manifest")
+            Arg::new("manifest")
                 .long("manifest")
                 .value_name("FILE")
                 .help("Output a JSON-encoded source information manifest to FILE")
