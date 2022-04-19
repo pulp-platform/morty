@@ -361,6 +361,9 @@ fn main() -> Result<()> {
             process::exit(1)
         });
         for fb in &mut u {
+            for (_k, v) in fb.export_incdirs.clone() {
+                fb.include_dirs.extend(v);
+            }
             fb.defines.extend(defines.clone());
             fb.include_dirs.extend(include_dirs.clone());
         }
@@ -370,6 +373,7 @@ fn main() -> Result<()> {
     if let Some(file_names) = matches.values_of("INPUT") {
         file_list.push(FileBundle {
             include_dirs: include_dirs.clone(),
+            export_incdirs: HashMap::new(),
             defines: defines.clone(),
             files: file_names.map(String::from).collect(),
         });
@@ -604,6 +608,7 @@ fn main() -> Result<()> {
         base_files.extend(pickle.used_libs.clone());
         bundles.push(FileBundle {
             include_dirs: include_dirs.clone(),
+            export_incdirs: HashMap::new(),
             defines: defines.clone(),
             files: base_files,
         });
@@ -720,6 +725,9 @@ struct Manifest {
 #[derive(Serialize, Deserialize, Debug)]
 struct FileBundle {
     include_dirs: Vec<String>,
+
+    #[serde(default)]
+    export_incdirs: HashMap<String, Vec<String>>,
     defines: HashMap<String, Option<String>>,
     files: Vec<String>,
 }
