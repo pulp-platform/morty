@@ -6,6 +6,30 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## Unreleased
 
+## 0.7.0 - 2022-08-09
+### Fixed
+- Update `clap` to `v3`
+- Remove `failure` dependency
+- Add compatibility for new `bender` formats
+- Correctly parse model identifiers with `(* attribute *)`
+- Update `sv-parser` to `0.12`
+- Update `simple_logger` to `2.2`
+- Update `pulldown-cmark` to `0.9`
+
+### Changed
+- Change crate to allow use of functionality with a Rust library
+
+## 0.6.0 - 2022-01-21
+### Fixed
+- Bump `svparser` to `0.11.1`
+- Use builder pattern for simple logger
+- Add readable errors instead of `unwrap`
+
+### Added
+- Add `-o` flag for fiile output
+- List undefined modules if detected
+- Support loading library files
+- Add option to output manifest
 
 ## 0.5.2 - 2021-02-04
 ### Fixed

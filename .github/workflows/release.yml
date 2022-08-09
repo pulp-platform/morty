@@ -82,8 +82,9 @@ jobs:
       matrix:
         container:
         - 'ubuntu:18.04'
+        - 'ubuntu:20.04'
+        - 'ubuntu:22.04'
         - 'centos:7'
-        - 'centos:8' # centos:latest
     runs-on: ubuntu-latest
     container: ${{ matrix.container }}
     steps:
