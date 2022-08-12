@@ -2,6 +2,7 @@
 
 use super::*;
 use anyhow::{Context as _, Result};
+use chrono::Local;
 use std::{
     fs::write,
     fs::File,
@@ -22,6 +23,13 @@ impl<'a> Renderer<'a> {
     }
 
     pub fn render_header(&mut self, out: &mut impl Write) -> Result<()> {
+        write!(
+            out,
+            "<!-- Compiled by morty-{} / {} -->\n\n",
+            env!("CARGO_PKG_VERSION"),
+            Local::now()
+        )
+        .unwrap();
         writeln!(out, "<html>")?;
         writeln!(
             out,
