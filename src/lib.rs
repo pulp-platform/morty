@@ -9,6 +9,7 @@
 extern crate log;
 
 use anyhow::{anyhow, Context as _, Error, Result};
+use chrono::Local;
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -100,6 +101,13 @@ pub fn do_pickle<'a>(
     }
 
     syntax_trees.extend(library_files);
+    write!(
+        out,
+        "// Compiled by morty-{} / {}\n\n",
+        env!("CARGO_PKG_VERSION"),
+        Local::now()
+    )
+    .unwrap();
 
     // Emit the pickled source files.
     for pf in &syntax_trees {
@@ -206,6 +214,13 @@ pub fn build_syntax_tree(
 }
 
 pub fn just_preprocess(syntax_trees: Vec<ParsedFile>, mut out: Box<dyn Write>) -> Result<()> {
+    write!(
+        out,
+        "// Compiled by morty-{} / {}\n\n",
+        env!("CARGO_PKG_VERSION"),
+        Local::now()
+    )
+    .unwrap();
     for pf in syntax_trees {
         eprintln!("{}:", pf.path);
         writeln!(out, "{:}", pf.source).unwrap();
