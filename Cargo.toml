@@ -7,7 +7,7 @@ edition = "2018"
 license-file = "LICENSE"
 keywords = ["hardware-dev", "system-verilog"]
 categories = ["command-line-utilities"]
-repository = "https://github.com/zarubaf/morty/"
+repository = "https://github.com/pulp-platform/morty/"
 readme = "README.md"
 
 [dependencies]
