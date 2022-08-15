@@ -142,6 +142,13 @@ fn main() -> Result<()> {
                 .help("Output a JSON-encoded source information manifest to FILE")
                 .takes_value(true),
         )
+        .arg(
+            Arg::new("top_module")
+                .long("top")
+                .value_name("TOP_MODULE")
+                .help("Top module, strip all unneeded modules")
+                .takes_value(true),
+        )
         .get_matches();
 
     let logger_level = matches.occurrences_of("v");
@@ -291,12 +298,20 @@ fn main() -> Result<()> {
         library_bundle,
         syntax_trees,
         out,
+        matches.value_of("top_module"),
     )?;
 
     // if the user requested a manifest we need to compute the information and output it in json
     // form
     if let Some(manifest_file) = matches.value_of("manifest") {
-        write_manifest(manifest_file, pickle, file_list, include_dirs, defines)?;
+        write_manifest(
+            manifest_file,
+            pickle,
+            file_list,
+            include_dirs,
+            defines,
+            matches.value_of("top_module"),
+        )?;
     }
 
     Ok(())
