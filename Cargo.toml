@@ -2,7 +2,7 @@
 name = "morty"
 version = "0.7.0"
 description = "A SystemVerilog source file pickler."
-authors = ["Florian Zaruba <zarubaf@iis.ee.ethz.ch>", "Fabian Schuiki <fschuiki@iis.ee.ethz.ch>"]
+authors = ["Florian Zaruba <zarubaf@iis.ee.ethz.ch>", "Fabian Schuiki <fschuiki@iis.ee.ethz.ch>", "Michael Rogenmoser <michaero@iis.ee.ethz.ch>"]
 edition = "2018"
 license-file = "LICENSE"
 keywords = ["hardware-dev", "system-verilog"]

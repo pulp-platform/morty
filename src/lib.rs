@@ -40,25 +40,18 @@ pub fn do_pickle<'a>(
     mut out: Box<dyn Write>,
     top_module: Option<&'a str>,
 ) -> Result<Pickle<'a>> {
-    let mut pickle = Pickle {
+    let mut pickle = Pickle::new(
         // Collect renaming options.
         prefix,
         suffix,
         exclude_rename,
         exclude,
-        // Create a rename table.
-        rename_table: HashMap::new(),
-        replace_table: vec![],
-        inst_table: HashSet::new(),
-        libs: library_bundle,
-        used_libs: vec![],
-        module_graph: Graph::new(),
-        module_graph_nodes: HashMap::new(),
-        module_file_map: HashMap::new(),
-    };
+        library_bundle,
+    );
 
     // Gather information for pickling.
     for pf in &syntax_trees {
+        // println!("{}", pf.ast);
         for node in &pf.ast {
             trace!("{:#?}", node);
             match node {
@@ -90,15 +83,49 @@ pub fn do_pickle<'a>(
     let mut library_files: Vec<ParsedFile> = vec![];
     for pf in &syntax_trees {
         for node in &pf.ast {
-            if let RefNode::ModuleInstantiation(x) = node {
-                let id = unwrap_node!(x, SimpleIdentifier).unwrap();
-                pickle.register_instantiation(&pf.ast, id.clone());
+            match node {
+                RefNode::ModuleInstantiation(x) => {
+                    let id = unwrap_node!(x, SimpleIdentifier).unwrap();
+                    let (inst_name, _) = get_identifier(&pf.ast, id.clone());
+                    // println!("{:?}", inst_name);
+                    pickle.register_instantiation(&pf.ast, id.clone());
 
-                let (inst_name, _) = get_identifier(&pf.ast, id);
-                if !pickle.rename_table.contains_key(&inst_name) {
-                    info!("Could not find {}, checking libraries...", &inst_name);
-                    pickle.load_library_module(&inst_name, &mut library_files);
+                    if !pickle.rename_table.contains_key(&inst_name) {
+                        info!("Could not find {}, checking libraries...", &inst_name);
+                        pickle.load_library_module(&inst_name, &mut library_files);
+                    }
                 }
+                RefNode::PackageImportItem(x) => {
+                    let id = unwrap_node!(x, SimpleIdentifier).unwrap();
+                    // let (inst_name, _) = get_identifier(&pf.ast, id.clone());
+                    // println!("{:?}", inst_name);
+                    pickle.register_instantiation(&pf.ast, id.clone());
+
+                    // let (inst_name, _) = get_identifier(&pf.ast, id);
+                    // if !pickle.rename_table.contains_key(&inst_name) {
+                    //     info!("Could not find {}, checking libraries...", &inst_name);
+                    //     pickle.load_library_module(&inst_name, &mut library_files);
+                    // }
+                }
+                RefNode::PackageScope(x) => {
+                    let id = unwrap_node!(x, SimpleIdentifier).unwrap();
+                    // let (inst_name, _) = get_identifier(&pf.ast, id.clone());
+                    // println!("{:?}", inst_name);
+                    pickle.register_instantiation(&pf.ast, id.clone());
+
+                    // let (inst_name, _) = get_identifier(&pf.ast, id);
+                    // if !pickle.rename_table.contains_key(&inst_name) {
+                    //     info!("Could not find {}, checking libraries...", &inst_name);
+                    //     pickle.load_library_module(&inst_name, &mut library_files);
+                    // }
+                }
+                RefNode::InterfacePortHeader(x) => {
+                    let id = unwrap_node!(x, SimpleIdentifier).unwrap();
+                    // let (inst_name, _) = get_identifier(&pf.ast, id.clone());
+                    // println!("{:?}", inst_name);
+                    pickle.register_instantiation(&pf.ast, id.clone());
+                }
+                _ => (),
             }
         }
     }
@@ -114,7 +141,7 @@ pub fn do_pickle<'a>(
 
     match top_module {
         Some(top) => {
-            pickle.prune_graph(top);
+            pickle.prune_graph(top)?;
         }
         None => {}
     }
@@ -185,6 +212,7 @@ pub fn do_pickle<'a>(
                 continue;
             }
             trace!("Replacing: {},{}, {}", offset, len, repl);
+            // TODO MICHAERO: optionally remove define blocks -> all defines are already inserted, so define statements should not be needed
             write!(out, "{}", &pf.source[pos..*offset]).unwrap();
             write!(out, "{}", repl).unwrap();
             pos = offset + len;
@@ -364,6 +392,31 @@ pub struct Pickle<'a> {
 }
 
 impl<'a> Pickle<'a> {
+    pub fn new(
+        prefix: Option<&'a str>,
+        suffix: Option<&'a str>,
+        exclude_rename: HashSet<&'a str>,
+        exclude: HashSet<&'a str>,
+        libs: LibraryBundle,
+    ) -> Self {
+        Self {
+            prefix,
+            suffix,
+            exclude_rename,
+            exclude,
+            // Create a rename table.
+            rename_table: HashMap::new(),
+            replace_table: vec![],
+            inst_table: HashSet::new(),
+            libs,
+            used_libs: vec![],
+            // Create graph.
+            module_graph: Graph::new(),
+            module_graph_nodes: HashMap::new(),
+            module_file_map: HashMap::new(),
+        }
+    }
+
     /// Register a declaration such as a package or module.
     pub fn register_declaration(&mut self, syntax_tree: &SyntaxTree, id: RefNode, file: String) {
         let (module_name, loc) = get_identifier(syntax_tree, id);
@@ -393,18 +446,19 @@ impl<'a> Pickle<'a> {
         let (inst_name, _) = get_identifier(syntax_tree, id.clone());
         self.inst_table.insert(inst_name.clone());
 
-        let (parent_name, _) = get_calling_module(syntax_tree, id);
-        if !self.module_graph_nodes.contains_key(&inst_name) {
-            self.module_graph_nodes.insert(
-                inst_name.clone(),
-                self.module_graph.add_node(inst_name.clone()),
+        if let Some((parent_name, _)) = get_calling_module(syntax_tree, id) {
+            if !self.module_graph_nodes.contains_key(&inst_name) {
+                self.module_graph_nodes.insert(
+                    inst_name.clone(),
+                    self.module_graph.add_node(inst_name.clone()),
+                );
+            }
+            self.module_graph.update_edge(
+                self.module_graph_nodes[&parent_name],
+                self.module_graph_nodes[&inst_name],
+                (),
             );
         }
-        self.module_graph.add_edge(
-            self.module_graph_nodes[&parent_name],
-            self.module_graph_nodes[&inst_name],
-            (),
-        );
     }
 
     /// Register a usage of the identifier.
@@ -476,7 +530,10 @@ impl<'a> Pickle<'a> {
         }
     }
 
-    pub fn prune_graph(&mut self, top_module: &str) {
+    pub fn prune_graph(&mut self, top_module: &str) -> Result<()> {
+        if !self.module_graph_nodes.contains_key(top_module) {
+            return Err(anyhow!("Module {} not found!", top_module));
+        }
         let test_weights = dijkstra(
             &self.module_graph,
             self.module_graph_nodes[top_module],
@@ -496,6 +553,8 @@ impl<'a> Pickle<'a> {
         self.inst_table.retain(|k| test_keys.contains_key(k));
 
         self.rename_table.retain(|k, _| test_keys.contains_key(k));
+
+        Ok(())
     }
 }
 
@@ -581,11 +640,12 @@ pub fn get_identifier(st: &SyntaxTree, node: RefNode) -> (String, Locate) {
     }
 }
 
-pub fn get_calling_module(st: &SyntaxTree, node: RefNode) -> (String, Locate) {
-    let (_, loc0) = get_identifier(
-        st,
-        unwrap_node!(node.clone(), SimpleIdentifier, EscapedIdentifier).unwrap(),
-    );
+pub fn get_calling_module(st: &SyntaxTree, node: RefNode) -> Option<(String, Locate)> {
+    let unwrapped_node = unwrap_node!(node.clone(), SimpleIdentifier, EscapedIdentifier).unwrap();
+    // let (_, loc0) = get_identifier(st, unwrapped_node.clone());
+
+    // TODO MICHAERO: THIS IS SUUUPER SLOW!!! Especially for packages that have many sub packages...
+
     // unwrap_node! can take multiple types
     for st_node in st {
         match st_node {
@@ -598,15 +658,13 @@ pub fn get_calling_module(st: &SyntaxTree, node: RefNode) -> (String, Locate) {
                 // println!("module_name: {:?}", module_name);
                 // println!("{:?}", x.nodes);
                 let my_ref_node: RefNode = x.into();
-                for sub_node in my_ref_node.into_iter() {
-                    let unwrapped = unwrap_node!(sub_node, SimpleIdentifier, EscapedIdentifier);
-                    if let Some(y) = unwrapped {
-                        let (_, loc1) = get_identifier(st, y);
-                        if loc0 == loc1 {
-                            return (module_name, module_loc);
-                            // println!("Gotem {} {}", module_name, og_name);
-                        }
-                    }
+                if my_ref_node
+                    .into_iter()
+                    .map(|sub_node| unwrap_node!(sub_node, SimpleIdentifier, EscapedIdentifier))
+                    .flatten()
+                    .any(|id| id == unwrapped_node)
+                {
+                    return Some((module_name, module_loc));
                 }
             }
             RefNode::ModuleDeclarationNonansi(x) => {
@@ -617,21 +675,58 @@ pub fn get_calling_module(st: &SyntaxTree, node: RefNode) -> (String, Locate) {
                 // println!("module_name: {:?}", module_name);
                 // println!("{:?}", x.nodes);
                 let my_ref_node: RefNode = x.into();
-                for sub_node in my_ref_node.into_iter() {
-                    let unwrapped = unwrap_node!(sub_node, SimpleIdentifier, EscapedIdentifier);
-                    if let Some(y) = unwrapped {
-                        let (_, loc1) = get_identifier(st, y);
-                        if loc0 == loc1 {
-                            return (module_name, module_loc);
-                            // println!("Gotem {} {}", module_name, og_name);
-                        }
-                    }
+                if my_ref_node
+                    .into_iter()
+                    .map(|sub_node| unwrap_node!(sub_node, SimpleIdentifier, EscapedIdentifier))
+                    .flatten()
+                    .any(|id| id == unwrapped_node)
+                {
+                    return Some((module_name, module_loc));
                 }
             }
+            // Interface Declaration.
+            RefNode::InterfaceDeclaration(x) => {
+                // unwrap_node! gets the nearest InterfaceIdentifier from x
+                let id = unwrap_node!(x, InterfaceIdentifier).unwrap();
+                let (module_name, module_loc) = get_identifier(st, id);
+                // println!("module_name: {:?}", module_name);
+                // println!("{:?}", x.nodes);
+                let my_ref_node: RefNode = x.into();
+                if my_ref_node
+                    .into_iter()
+                    .map(|sub_node| unwrap_node!(sub_node, SimpleIdentifier, EscapedIdentifier))
+                    .flatten()
+                    .any(|id| id == unwrapped_node)
+                {
+                    return Some((module_name, module_loc));
+                }
+            }
+            // Package declarations.
+            RefNode::PackageDeclaration(x) => {
+                // unwrap_node! gets the nearest PackageIdentifier from x
+                let id = unwrap_node!(x, PackageIdentifier).unwrap();
+                let (module_name, module_loc) = get_identifier(st, id);
+                // println!("module_name: {:?}", module_name);
+                // println!("{:?}", x.nodes);
+                let my_ref_node: RefNode = x.into();
+                if my_ref_node
+                    .into_iter()
+                    .map(|sub_node| unwrap_node!(sub_node, SimpleIdentifier, EscapedIdentifier))
+                    .flatten()
+                    .any(|id| id == unwrapped_node)
+                {
+                    return Some((module_name, module_loc));
+                }
+            }
+
             _ => {}
         }
     }
-    panic!("No calling module found.");
+    // println!("{}", st);
+    // println!("{:?}", loc0);
+    println!("Possible global package import, not properly parsed! TODO MICHAERO better error reporting to fix issue.");
+    // panic!("No calling module found.");
+    None
 }
 
 #[derive(Serialize, Deserialize, Debug)]
