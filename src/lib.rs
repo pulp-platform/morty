@@ -82,48 +82,87 @@ pub fn do_pickle<'a>(
 
     let mut library_files: Vec<ParsedFile> = vec![];
     for pf in &syntax_trees {
+        // global package import
+        let global_packages = &pf
+            .ast
+            .into_iter()
+            .filter_map(|node| {
+                if let RefNode::DescriptionPackageItem(x) = node {
+                    let (name, _loc) =
+                        get_identifier(&pf.ast, unwrap_node!(x, SimpleIdentifier).unwrap());
+                    warn!("Global package import in {}", &pf.path);
+                    Some(name)
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+
         for node in &pf.ast {
             match node {
-                RefNode::ModuleInstantiation(x) => {
-                    let id = unwrap_node!(x, SimpleIdentifier).unwrap();
-                    let (inst_name, _) = get_identifier(&pf.ast, id.clone());
-                    // println!("{:?}", inst_name);
-                    pickle.register_instantiation(&pf.ast, id.clone());
+                // Module declarations.
+                RefNode::ModuleDeclarationAnsi(x) => {
+                    // unwrap_node! gets the nearest ModuleIdentifier from x
+                    let parent_id = unwrap_node!(x, ModuleIdentifier).unwrap();
+                    let (parent_name, _) = get_identifier(&pf.ast, parent_id);
 
-                    if !pickle.rename_table.contains_key(&inst_name) {
-                        info!("Could not find {}, checking libraries...", &inst_name);
-                        pickle.load_library_module(&inst_name, &mut library_files);
+                    let my_ref_node: RefNode = x.into();
+                    pickle.find_and_register_instantiations(
+                        &pf.ast,
+                        my_ref_node,
+                        &parent_name,
+                        &mut library_files,
+                    );
+                    for package in global_packages {
+                        pickle.add_dependency_relation(package, &parent_name);
                     }
                 }
-                RefNode::PackageImportItem(x) => {
-                    let id = unwrap_node!(x, SimpleIdentifier).unwrap();
-                    // let (inst_name, _) = get_identifier(&pf.ast, id.clone());
-                    // println!("{:?}", inst_name);
-                    pickle.register_instantiation(&pf.ast, id.clone());
+                RefNode::ModuleDeclarationNonansi(x) => {
+                    let parent_id = unwrap_node!(x, ModuleIdentifier).unwrap();
+                    let (parent_name, _) = get_identifier(&pf.ast, parent_id);
 
-                    // let (inst_name, _) = get_identifier(&pf.ast, id);
-                    // if !pickle.rename_table.contains_key(&inst_name) {
-                    //     info!("Could not find {}, checking libraries...", &inst_name);
-                    //     pickle.load_library_module(&inst_name, &mut library_files);
-                    // }
+                    let my_ref_node: RefNode = x.into();
+                    pickle.find_and_register_instantiations(
+                        &pf.ast,
+                        my_ref_node,
+                        &parent_name,
+                        &mut library_files,
+                    );
+                    for package in global_packages {
+                        pickle.add_dependency_relation(package, &parent_name);
+                    }
                 }
-                RefNode::PackageScope(x) => {
-                    let id = unwrap_node!(x, SimpleIdentifier).unwrap();
-                    // let (inst_name, _) = get_identifier(&pf.ast, id.clone());
-                    // println!("{:?}", inst_name);
-                    pickle.register_instantiation(&pf.ast, id.clone());
+                // Interface Declaration.
+                RefNode::InterfaceDeclaration(x) => {
+                    let parent_id = unwrap_node!(x, InterfaceIdentifier).unwrap();
+                    let (parent_name, _) = get_identifier(&pf.ast, parent_id);
 
-                    // let (inst_name, _) = get_identifier(&pf.ast, id);
-                    // if !pickle.rename_table.contains_key(&inst_name) {
-                    //     info!("Could not find {}, checking libraries...", &inst_name);
-                    //     pickle.load_library_module(&inst_name, &mut library_files);
-                    // }
+                    let my_ref_node: RefNode = x.into();
+                    pickle.find_and_register_instantiations(
+                        &pf.ast,
+                        my_ref_node,
+                        &parent_name,
+                        &mut library_files,
+                    );
+                    for package in global_packages {
+                        pickle.add_dependency_relation(package, &parent_name);
+                    }
                 }
-                RefNode::InterfacePortHeader(x) => {
-                    let id = unwrap_node!(x, SimpleIdentifier).unwrap();
-                    // let (inst_name, _) = get_identifier(&pf.ast, id.clone());
-                    // println!("{:?}", inst_name);
-                    pickle.register_instantiation(&pf.ast, id.clone());
+                // Package declarations.
+                RefNode::PackageDeclaration(x) => {
+                    let parent_id = unwrap_node!(x, PackageIdentifier).unwrap();
+                    let (parent_name, _) = get_identifier(&pf.ast, parent_id);
+
+                    let my_ref_node: RefNode = x.into();
+                    pickle.find_and_register_instantiations(
+                        &pf.ast,
+                        my_ref_node,
+                        &parent_name,
+                        &mut library_files,
+                    );
+                    for package in global_packages {
+                        pickle.add_dependency_relation(package, &parent_name);
+                    }
                 }
                 _ => (),
             }
@@ -304,7 +343,7 @@ pub fn write_manifest(
     // find top modules
     match top_module {
         Some(x) => {
-            top_modules.push(x.to_string());
+            top_modules.push(pickle.rename_table[x].to_string());
         }
         None => {
             for new_name in pickle.rename_table.values() {
@@ -447,18 +486,94 @@ impl<'a> Pickle<'a> {
         self.inst_table.insert(inst_name.clone());
 
         if let Some((parent_name, _)) = get_calling_module(syntax_tree, id) {
-            if !self.module_graph_nodes.contains_key(&inst_name) {
-                self.module_graph_nodes.insert(
-                    inst_name.clone(),
-                    self.module_graph.add_node(inst_name.clone()),
-                );
-            }
-            self.module_graph.update_edge(
-                self.module_graph_nodes[&parent_name],
-                self.module_graph_nodes[&inst_name],
-                (),
+            self.add_dependency_relation(&inst_name, &parent_name);
+        }
+    }
+
+    pub fn register_instantiation_with_parent(
+        &mut self,
+        syntax_tree: &SyntaxTree,
+        id: RefNode,
+        parent_name: &str,
+    ) {
+        let (inst_name, _) = get_identifier(syntax_tree, id.clone());
+        self.inst_table.insert(inst_name.clone());
+
+        self.add_dependency_relation(&inst_name, parent_name);
+    }
+
+    pub fn add_dependency_relation(&mut self, inst_name: &str, parent_name: &str) {
+        if !self.module_graph_nodes.contains_key(inst_name) {
+            self.module_graph_nodes.insert(
+                inst_name.to_string(),
+                self.module_graph.add_node(inst_name.to_string()),
             );
         }
+        self.module_graph.update_edge(
+            self.module_graph_nodes[parent_name],
+            self.module_graph_nodes[inst_name],
+            (),
+        );
+    }
+
+    pub fn find_and_register_instantiations(
+        &mut self,
+        syntax_tree: &SyntaxTree,
+        id: RefNode,
+        parent_name: &str,
+        library_files: &mut Vec<ParsedFile>,
+    ) {
+        for node in id {
+            match node {
+                RefNode::ModuleInstantiation(x) => {
+                    let id = unwrap_node!(x, SimpleIdentifier).unwrap();
+                    self.register_instantiation_with_parent(syntax_tree, id.clone(), parent_name);
+
+                    let (inst_name, _) = get_identifier(syntax_tree, id.clone());
+                    if !self.rename_table.contains_key(&inst_name) {
+                        info!("Could not find {}, checking libraries...", &inst_name);
+                        self.load_library_module(&inst_name, library_files);
+                    }
+                }
+                RefNode::PackageImportItem(x) => {
+                    let id = unwrap_node!(x, SimpleIdentifier).unwrap();
+                    self.register_instantiation_with_parent(syntax_tree, id.clone(), parent_name);
+
+                    let (inst_name, _) = get_identifier(syntax_tree, id);
+                    if !self.rename_table.contains_key(&inst_name) {
+                        info!("Could not find {}, checking libraries...", &inst_name);
+                        self.load_library_module(&inst_name, library_files);
+                    }
+                }
+                RefNode::PackageScope(x) => {
+                    let id = unwrap_node!(x, SimpleIdentifier).unwrap();
+                    self.register_instantiation_with_parent(syntax_tree, id.clone(), parent_name);
+
+                    let (inst_name, _) = get_identifier(syntax_tree, id);
+                    if !self.rename_table.contains_key(&inst_name) {
+                        info!("Could not find {}, checking libraries...", &inst_name);
+                        self.load_library_module(&inst_name, library_files);
+                    }
+                }
+                RefNode::InterfacePortHeader(x) => {
+                    let id = unwrap_node!(x, SimpleIdentifier).unwrap();
+                    self.register_instantiation_with_parent(syntax_tree, id.clone(), parent_name);
+
+                    let (inst_name, _) = get_identifier(syntax_tree, id);
+                    if !self.rename_table.contains_key(&inst_name) {
+                        info!("Could not find {}, checking libraries...", &inst_name);
+                        self.load_library_module(&inst_name, library_files);
+                    }
+                }
+                _ => (),
+            }
+        }
+
+        // for id.into_iter()
+        // .into_iter()
+        // .map(|sub_node| unwrap_node!(sub_node, SimpleIdentifier, EscapedIdentifier))
+        // .flatten()
+        // .any(|id| id == unwrapped_node)
     }
 
     /// Register a usage of the identifier.
@@ -660,8 +775,9 @@ pub fn get_calling_module(st: &SyntaxTree, node: RefNode) -> Option<(String, Loc
                 let my_ref_node: RefNode = x.into();
                 if my_ref_node
                     .into_iter()
-                    .map(|sub_node| unwrap_node!(sub_node, SimpleIdentifier, EscapedIdentifier))
-                    .flatten()
+                    .filter_map(|sub_node| {
+                        unwrap_node!(sub_node, SimpleIdentifier, EscapedIdentifier)
+                    })
                     .any(|id| id == unwrapped_node)
                 {
                     return Some((module_name, module_loc));
@@ -677,8 +793,9 @@ pub fn get_calling_module(st: &SyntaxTree, node: RefNode) -> Option<(String, Loc
                 let my_ref_node: RefNode = x.into();
                 if my_ref_node
                     .into_iter()
-                    .map(|sub_node| unwrap_node!(sub_node, SimpleIdentifier, EscapedIdentifier))
-                    .flatten()
+                    .filter_map(|sub_node| {
+                        unwrap_node!(sub_node, SimpleIdentifier, EscapedIdentifier)
+                    })
                     .any(|id| id == unwrapped_node)
                 {
                     return Some((module_name, module_loc));
@@ -694,8 +811,9 @@ pub fn get_calling_module(st: &SyntaxTree, node: RefNode) -> Option<(String, Loc
                 let my_ref_node: RefNode = x.into();
                 if my_ref_node
                     .into_iter()
-                    .map(|sub_node| unwrap_node!(sub_node, SimpleIdentifier, EscapedIdentifier))
-                    .flatten()
+                    .filter_map(|sub_node| {
+                        unwrap_node!(sub_node, SimpleIdentifier, EscapedIdentifier)
+                    })
                     .any(|id| id == unwrapped_node)
                 {
                     return Some((module_name, module_loc));
@@ -711,8 +829,9 @@ pub fn get_calling_module(st: &SyntaxTree, node: RefNode) -> Option<(String, Loc
                 let my_ref_node: RefNode = x.into();
                 if my_ref_node
                     .into_iter()
-                    .map(|sub_node| unwrap_node!(sub_node, SimpleIdentifier, EscapedIdentifier))
-                    .flatten()
+                    .filter_map(|sub_node| {
+                        unwrap_node!(sub_node, SimpleIdentifier, EscapedIdentifier)
+                    })
                     .any(|id| id == unwrapped_node)
                 {
                     return Some((module_name, module_loc));
@@ -724,7 +843,7 @@ pub fn get_calling_module(st: &SyntaxTree, node: RefNode) -> Option<(String, Loc
     }
     // println!("{}", st);
     // println!("{:?}", loc0);
-    println!("Possible global package import, not properly parsed! TODO MICHAERO better error reporting to fix issue.");
+    println!("Possible global package import, not properly parsed! TODO MICHAERO better error reporting to fix issue, link all modules/packages/interfaces in file to the dependency.");
     // panic!("No calling module found.");
     None
 }
