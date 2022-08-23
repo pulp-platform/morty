@@ -39,8 +39,8 @@ pub fn do_pickle<'a>(
 ) -> Result<Pickle<'a>> {
     let mut pickle = Pickle {
         // Collect renaming options.
-        prefix: prefix,
-        suffix: suffix,
+        prefix,
+        suffix,
         exclude_rename,
         exclude,
         // Create a rename table.
@@ -84,18 +84,15 @@ pub fn do_pickle<'a>(
     let mut library_files: Vec<ParsedFile> = vec![];
     for pf in &syntax_trees {
         for node in &pf.ast {
-            match node {
-                RefNode::ModuleInstantiation(x) => {
-                    let id = unwrap_node!(x, SimpleIdentifier).unwrap();
-                    pickle.register_instantiation(&pf.ast, id.clone());
+            if let RefNode::ModuleInstantiation(x) = node {
+                let id = unwrap_node!(x, SimpleIdentifier).unwrap();
+                pickle.register_instantiation(&pf.ast, id.clone());
 
-                    let (inst_name, _) = get_identifier(&pf.ast, id);
-                    if !pickle.rename_table.contains_key(&inst_name) {
-                        info!("Could not find {}, checking libraries...", &inst_name);
-                        pickle.load_library_module(&inst_name, &mut library_files);
-                    }
+                let (inst_name, _) = get_identifier(&pf.ast, id);
+                if !pickle.rename_table.contains_key(&inst_name) {
+                    info!("Could not find {}, checking libraries...", &inst_name);
+                    pickle.load_library_module(&inst_name, &mut library_files);
                 }
-                _ => (),
             }
         }
     }
@@ -200,7 +197,7 @@ pub fn build_syntax_tree(
             .par_iter()
             .map(|filename| -> Result<_> {
                 parse_file(
-                    &filename,
+                    filename,
                     &bundle_include_dirs,
                     &bundle_defines,
                     strip_comments,
@@ -254,7 +251,7 @@ pub fn write_manifest(
     let mut top_modules = Vec::new();
 
     // find top modules
-    for (_old_name, new_name) in &pickle.rename_table {
+    for new_name in pickle.rename_table.values() {
         if !pickle.inst_table.contains(new_name) {
             top_modules.push(new_name.to_string());
         }
@@ -269,11 +266,11 @@ pub fn write_manifest(
             bundles.push(bundle);
         }
     }
-    base_files.extend(pickle.used_libs.clone());
+    base_files.extend(pickle.used_libs);
     bundles.push(FileBundle {
-        include_dirs: include_dirs.clone(),
+        include_dirs,
         export_incdirs: HashMap::new(),
-        defines: defines.clone(),
+        defines,
         files: base_files,
     });
 
@@ -337,13 +334,13 @@ impl<'a> Pickle<'a> {
     }
 
     pub fn register_instantiation(&mut self, syntax_tree: &SyntaxTree, id: RefNode) {
-        let (inst_name, _) = get_identifier(&syntax_tree, id);
+        let (inst_name, _) = get_identifier(syntax_tree, id);
         self.inst_table.insert(inst_name);
     }
 
     /// Register a usage of the identifier.
     pub fn register_usage(&mut self, syntax_tree: &SyntaxTree, id: RefNode) {
-        let (inst_name, loc) = get_identifier(&syntax_tree, id);
+        let (inst_name, loc) = get_identifier(syntax_tree, id);
         let new_name = match self.rename_table.get(&inst_name) {
             Some(x) => x,
             None => return,
@@ -355,7 +352,7 @@ impl<'a> Pickle<'a> {
 
     // Check whether a given declaration should be striped from the sources.
     pub fn register_exclude(&mut self, syntax_tree: &SyntaxTree, id: RefNode, locate: Locate) {
-        let (inst_name, loc) = get_identifier(&syntax_tree, id);
+        let (inst_name, loc) = get_identifier(syntax_tree, id);
         if self.exclude.contains(inst_name.as_str()) {
             debug!("Exclude `{}`: {:?}", inst_name, loc);
             self.replace_table
@@ -386,24 +383,21 @@ impl<'a> Pickle<'a> {
                 }
                 // look for all module instantiations
                 for node in &pf.ast {
-                    match node {
-                        RefNode::ModuleInstantiation(x) => {
-                            let id = unwrap_node!(x, SimpleIdentifier).unwrap();
-                            self.register_instantiation(&pf.ast, id.clone());
+                    if let RefNode::ModuleInstantiation(x) = node {
+                        let id = unwrap_node!(x, SimpleIdentifier).unwrap();
+                        self.register_instantiation(&pf.ast, id.clone());
 
-                            // if this module is undefined, recursively attempt to load a library
-                            // module for it.
-                            let (inst_name, _) = get_identifier(&pf.ast, id);
-                            info!(
-                                "Instantiation `{}` in library module `{}`",
-                                &inst_name, &module_name
-                            );
-                            if !self.rename_table.contains_key(&inst_name) {
-                                info!("load library module {}", &inst_name);
-                                self.load_library_module(&inst_name, files);
-                            }
+                        // if this module is undefined, recursively attempt to load a library
+                        // module for it.
+                        let (inst_name, _) = get_identifier(&pf.ast, id);
+                        info!(
+                            "Instantiation `{}` in library module `{}`",
+                            &inst_name, &module_name
+                        );
+                        if !self.rename_table.contains_key(&inst_name) {
+                            info!("load library module {}", &inst_name);
+                            self.load_library_module(&inst_name, files);
                         }
-                        _ => (),
                     }
                 }
                 // add the parsed file to the vector.
@@ -416,11 +410,10 @@ impl<'a> Pickle<'a> {
 
 // Returns true if this file has a library extension (.v or .sv).
 pub fn has_libext(p: &Path) -> bool {
-    match p.extension().and_then(OsStr::to_str) {
-        Some("sv") => true,
-        Some("v") => true,
-        _ => false,
-    }
+    matches!(
+        p.extension().and_then(OsStr::to_str),
+        Some("sv") | Some("v")
+    )
 }
 
 // Given a library filename, return the module name that this file must contain. Library files
@@ -437,10 +430,9 @@ pub fn defines_to_sv_parser(
         .iter()
         .map(|(name, value)| {
             // If there is a define text add it.
-            let define_text = match value {
-                Some(x) => Some(DefineText::new(String::from(x), None)),
-                None => None,
-            };
+            let define_text = value
+                .as_ref()
+                .map(|x| DefineText::new(String::from(x), None));
             (
                 name.clone(),
                 Some(Define::new(name.clone(), vec![], define_text)),
@@ -451,7 +443,7 @@ pub fn defines_to_sv_parser(
 
 pub fn parse_file(
     filename: &str,
-    bundle_include_dirs: &Vec<&Path>,
+    bundle_include_dirs: &[&Path],
     bundle_defines: &HashMap<String, Option<Define>>,
     strip_comments: bool,
 ) -> Result<ParsedFile> {
@@ -460,8 +452,8 @@ pub fn parse_file(
     // Preprocess the verilog files.
     let pp = preprocess(
         filename,
-        &bundle_defines,
-        &bundle_include_dirs,
+        bundle_defines,
+        bundle_include_dirs,
         strip_comments,
         false,
     )
@@ -471,8 +463,8 @@ pub fn parse_file(
     let syntax_tree = parse_sv_pp(pp.0, pp.1, false)
         .or_else(|err| -> Result<_> {
             let printer = Arc::new(Mutex::new(printer::Printer::new()));
-            let mut printer = &mut *printer.lock().unwrap();
-            print_parse_error(&mut printer, &err, false)?;
+            let printer = &mut *printer.lock().unwrap();
+            print_parse_error(printer, &err, false)?;
             Err(Error::new(err))
         })?
         .0;
@@ -545,7 +537,7 @@ impl LibraryBundle {
         files.push(f.to_string());
 
         // if so, parse the file and return the result (comments are always stripped).
-        return parse_file(&f, &bundle_include_dirs, &bundle_defines, true);
+        parse_file(&f, &bundle_include_dirs, &bundle_defines, true)
     }
 }
 

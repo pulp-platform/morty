@@ -47,6 +47,12 @@ pub struct Printer {
     term: Option<Box<StdoutTerminal>>,
 }
 
+impl Default for Printer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Printer {
     #[cfg_attr(tarpaulin, skip)]
     pub fn new() -> Printer {

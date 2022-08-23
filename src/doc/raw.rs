@@ -34,13 +34,13 @@ impl<'a> RawDoc<'a> {
                 NodeEvent::Enter(node) => match node {
                     RefNode::Comment(comment) => {
                         let s = ast.get_str(&comment.nodes.0).unwrap();
-                        if s.starts_with("//!") {
+                        if let Some(stripped) = s.strip_prefix("//!") {
                             let comments = &mut stack.last_mut().unwrap().comments;
                             if !comments.is_empty() && last_comment != LastComment::Parent {
                                 comments.push("");
                             }
                             last_comment = LastComment::Parent;
-                            comments.push(&s[3..]);
+                            comments.push(stripped);
                         } else if s.starts_with("///") && !s.starts_with("////") {
                             if !comments.is_empty() && last_comment != LastComment::Local {
                                 comments.push("");

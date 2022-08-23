@@ -23,9 +23,9 @@ impl<'a> Renderer<'a> {
     }
 
     pub fn render_header(&mut self, out: &mut impl Write) -> Result<()> {
-        write!(
+        writeln!(
             out,
-            "<!-- Compiled by morty-{} / {} -->\n\n",
+            "<!-- Compiled by morty-{} / {} -->\n",
             env!("CARGO_PKG_VERSION"),
             Local::now()
         )
@@ -106,15 +106,15 @@ impl<'a> Renderer<'a> {
         let mut out = File::create(path)?;
 
         self.render_header(&mut out)?;
-        write!(out, "<body>\n")?;
+        writeln!(out, "<body>")?;
         write!(out, "<section id=\"main\" class=\"content\">")?;
-        write!(out, "<h1 class=\"fqn\">Documentation</h1>\n")?;
+        writeln!(out, "<h1 class=\"fqn\">Documentation</h1>")?;
 
         self.render_contents(&doc.data, &mut out)?;
 
-        write!(out, "</section>\n")?;
-        write!(out, "</body>\n")?;
-        write!(out, "</html>\n")?;
+        writeln!(out, "</section>")?;
+        writeln!(out, "</body>")?;
+        writeln!(out, "</html>")?;
 
         Ok(())
     }
@@ -125,23 +125,23 @@ impl<'a> Renderer<'a> {
         let mut out = File::create(path)?;
 
         self.render_header(&mut out)?;
-        write!(out, "<body>\n")?;
+        writeln!(out, "<body>")?;
         write!(out, "<section id=\"main\" class=\"content\">")?;
-        write!(
+        writeln!(
             out,
-            "<h1 class=\"fqn\">Package <a class=\"package\">{}</a></h1>\n",
+            "<h1 class=\"fqn\">Package <a class=\"package\">{}</a></h1>",
             item.name
         )?;
 
-        write!(out, "<div class=\"docblock\">\n")?;
+        writeln!(out, "<div class=\"docblock\">")?;
         self.render_doc(&item.doc, &mut out)?;
-        write!(out, "</div>\n")?;
+        writeln!(out, "</div>")?;
 
         self.render_contents(&item.content, &mut out)?;
 
-        write!(out, "</section>\n")?;
-        write!(out, "</body>\n")?;
-        write!(out, "</html>\n")?;
+        writeln!(out, "</section>")?;
+        writeln!(out, "</body>")?;
+        writeln!(out, "</html>")?;
 
         Ok(())
     }
@@ -152,23 +152,23 @@ impl<'a> Renderer<'a> {
         let mut out = File::create(path)?;
 
         self.render_header(&mut out)?;
-        write!(out, "<body>\n")?;
+        writeln!(out, "<body>")?;
         write!(out, "<section id=\"main\" class=\"content\">")?;
-        write!(
+        writeln!(
             out,
-            "<h1 class=\"fqn\">Module <a class=\"module\">{}</a></h1>\n",
+            "<h1 class=\"fqn\">Module <a class=\"module\">{}</a></h1>",
             item.name
         )?;
 
-        write!(out, "<div class=\"docblock\">\n")?;
+        writeln!(out, "<div class=\"docblock\">")?;
         self.render_doc(&item.doc, &mut out)?;
-        write!(out, "</div>\n")?;
+        writeln!(out, "</div>")?;
 
         self.render_contents(&item.content, &mut out)?;
 
-        write!(out, "</section>\n")?;
-        write!(out, "</body>\n")?;
-        write!(out, "</html>\n")?;
+        writeln!(out, "</section>")?;
+        writeln!(out, "</body>")?;
+        writeln!(out, "</html>")?;
 
         Ok(())
     }
@@ -179,28 +179,28 @@ impl<'a> Renderer<'a> {
         let mut out = File::create(path)?;
 
         self.render_header(&mut out)?;
-        write!(out, "<body>\n")?;
+        writeln!(out, "<body>")?;
         write!(out, "<section id=\"main\" class=\"content\">")?;
-        write!(
+        writeln!(
             out,
-            "<h1 class=\"fqn\">Typedef <a class=\"type\">{}</a></h1>\n",
+            "<h1 class=\"fqn\">Typedef <a class=\"type\">{}</a></h1>",
             item.name
         )?;
 
-        write!(out, "<pre>typedef {} {};</pre>\n", item.ty, item.name)?;
+        writeln!(out, "<pre>typedef {} {};</pre>", item.ty, item.name)?;
         self.render_doc(&item.doc, &mut out)?;
 
-        write!(out, "</section>\n")?;
-        write!(out, "</body>\n")?;
-        write!(out, "</html>\n")?;
+        writeln!(out, "</section>")?;
+        writeln!(out, "</body>")?;
+        writeln!(out, "</html>")?;
 
         Ok(())
     }
 
     fn render_contents(&mut self, cx: &Context, out: &mut impl Write) -> Result<()> {
         if !cx.packages.is_empty() {
-            write!(out, "<h2 id=\"packages\">Packages</h2>\n")?;
-            write!(out, "<table>\n")?;
+            writeln!(out, "<h2 id=\"packages\">Packages</h2>")?;
+            writeln!(out, "<table>")?;
             for i in &cx.packages {
                 write!(
                     out,
@@ -213,11 +213,11 @@ impl<'a> Renderer<'a> {
                 self.render_package(i)
                     .with_context(|| format!("Failed ro render package `{}`", i.name))?;
             }
-            write!(out, "</table>\n")?;
+            writeln!(out, "</table>")?;
         }
         if !cx.modules.is_empty() {
-            write!(out, "<h2 id=\"modules\">Modules</h2>\n")?;
-            write!(out, "<table>\n")?;
+            writeln!(out, "<h2 id=\"modules\">Modules</h2>")?;
+            writeln!(out, "<table>")?;
             for i in &cx.modules {
                 write!(
                     out,
@@ -230,10 +230,10 @@ impl<'a> Renderer<'a> {
                 self.render_module(i)
                     .with_context(|| format!("Failed ro render module `{}`", i.name))?;
             }
-            write!(out, "</table>\n")?;
+            writeln!(out, "</table>")?;
         }
         if !cx.params.is_empty() {
-            write!(out, "<h2 id=\"parameters\" class=\"section-header\"><a href=\"#parameters\">Parameters</a></h2>\n")?;
+            writeln!(out, "<h2 id=\"parameters\" class=\"section-header\"><a href=\"#parameters\">Parameters</a></h2>")?;
             for i in &cx.params {
                 write!(
                     out,
@@ -242,15 +242,15 @@ impl<'a> Renderer<'a> {
                     i.ty,
                     i.html_id(),
                 )?;
-                write!(out, "<div class=\"docblock\"\n>")?;
+                writeln!(out, "<div class=\"docblock\">")?;
                 self.render_doc(&i.doc, out)?;
                 write!(out, "</div>")?;
             }
         }
         if !cx.ports.is_empty() {
-            write!(
+            writeln!(
                 out,
-                "<h2 id=\"ports\" class=\"section-header\"><a href=\"#ports\">Ports</a></h2>\n"
+                "<h2 id=\"ports\" class=\"section-header\"><a href=\"#ports\">Ports</a></h2>"
             )?;
             for i in &cx.ports {
                 write!(
@@ -260,17 +260,17 @@ impl<'a> Renderer<'a> {
                     i.ty,
                     i.html_id(),
                 )?;
-                write!(out, "<div class=\"docblock\"\n>")?;
+                writeln!(out, "<div class=\"docblock\">")?;
                 self.render_doc(&i.doc, out)?;
                 write!(out, "</div>")?;
             }
         }
         if !cx.types.is_empty() {
-            write!(
+            writeln!(
                 out,
-                "<h2 id=\"types\" class=\"section-header\"><a href=\"#types\">Types<a></h2>\n"
+                "<h2 id=\"types\" class=\"section-header\"><a href=\"#types\">Types<a></h2>"
             )?;
-            write!(out, "<table>\n")?;
+            writeln!(out, "<table>")?;
             for i in &cx.types {
                 write!(
                     out,
@@ -283,10 +283,13 @@ impl<'a> Renderer<'a> {
                 self.render_type(i)
                     .with_context(|| format!("Failed ro render type `{}`", i.name))?;
             }
-            write!(out, "</table>\n")?;
+            writeln!(out, "</table>")?;
         }
         if !cx.vars.is_empty() {
-            write!(out, "<h2 id=\"signals\" class=\"section-header\"><a href=\"#signals\">Signals</a></h2>\n")?;
+            writeln!(
+                out,
+                "<h2 id=\"signals\" class=\"section-header\"><a href=\"#signals\">Signals</a></h2>"
+            )?;
             for i in &cx.vars {
                 write!(
                     out,
@@ -295,7 +298,7 @@ impl<'a> Renderer<'a> {
                     i.ty,
                     i.html_id(),
                 )?;
-                write!(out, "<div class=\"docblock\"\n>")?;
+                writeln!(out, "<div class=\"docblock\">")?;
                 self.render_doc(&i.doc, out)?;
                 write!(out, "</div>")?;
             }
