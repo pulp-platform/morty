@@ -400,6 +400,22 @@ pub fn write_manifest(
     Ok(())
 }
 
+/// Write module graph to file
+pub fn write_dot_graph(pickle: &Pickle, graph_file: &str) -> Result<()> {
+    let path = Path::new(graph_file);
+    let mut out = Box::new(BufWriter::new(File::create(&path).unwrap())) as Box<dyn Write>;
+    writeln!(
+        out,
+        "{:?}",
+        petgraph::dot::Dot::with_config(
+            &pickle.module_graph,
+            &[petgraph::dot::Config::EdgeNoLabel]
+        )
+    )
+    .unwrap();
+    Ok(())
+}
+
 /// Struct containing information about
 /// what should be pickled and how.
 #[derive(Debug)]

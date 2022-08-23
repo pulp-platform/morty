@@ -149,6 +149,13 @@ fn main() -> Result<()> {
                 .help("Top module, strip all unneeded modules")
                 .takes_value(true),
         )
+        .arg(
+            Arg::new("graph_file")
+                .long("graph_file")
+                .value_name("FILE")
+                .help("Output a DOT graph of the parsed modules")
+                .takes_value(true),
+        )
         .get_matches();
 
     let logger_level = matches.occurrences_of("v");
@@ -300,6 +307,10 @@ fn main() -> Result<()> {
         out,
         matches.value_of("top_module"),
     )?;
+
+    if let Some(graph_file) = matches.value_of("graph_file") {
+        write_dot_graph(&pickle, graph_file)?;
+    }
 
     // if the user requested a manifest we need to compute the information and output it in json
     // form
