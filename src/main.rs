@@ -152,7 +152,7 @@ fn main() -> Result<()> {
             0 => LevelFilter::Warn,
             1 => LevelFilter::Info,
             2 => LevelFilter::Debug,
-            3 | _ => LevelFilter::Trace,
+            _ => LevelFilter::Trace,
         })
         .with_utc_timestamps()
         .init()

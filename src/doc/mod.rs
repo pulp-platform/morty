@@ -31,7 +31,7 @@ impl<'a> Doc<'a> {
         // Analyze the files into proper documentation nodes.
         let mut data = Context::default();
         for (_pf, raw) in &raw {
-            data.analyze_scopes(&raw, &raw.root.children);
+            data.analyze_scopes(raw, &raw.root.children);
         }
         debug!("{:#?}", data);
 
@@ -106,7 +106,7 @@ impl Context {
                         ));
                     }
                 }
-                _ => return,
+                _ => (),
             },
             RefNode::AnsiPortDeclaration(sv::AnsiPortDeclaration::Net(decl)) => {
                 self.ports.push(PortItem::from(
@@ -214,7 +214,7 @@ pub struct ParamItem {
 }
 
 impl ParamItem {
-    fn from_param<'a>(
+    fn from_param(
         raw: &RawDoc,
         scope: &Scope,
         assign: &sv::ParamAssignment,
@@ -227,7 +227,7 @@ impl ParamItem {
         }
     }
 
-    fn from_type<'a>(raw: &RawDoc, scope: &Scope, assign: &sv::TypeAssignment) -> Self {
+    fn from_type(raw: &RawDoc, scope: &Scope, assign: &sv::TypeAssignment) -> Self {
         Self {
             doc: parse_docs(raw, &scope.comments),
             name: parse_ident(raw, &assign.nodes.0.nodes.0),
@@ -248,7 +248,7 @@ pub struct PortItem {
 }
 
 impl PortItem {
-    fn from<'a>(
+    fn from(
         raw: &RawDoc,
         scope: &Scope,
         name: &sv::Identifier,
