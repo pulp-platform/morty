@@ -269,6 +269,7 @@ pub fn do_pickle<'a>(
 pub fn build_syntax_tree(
     file_list: &Vec<FileBundle>,
     strip_comments: bool,
+    ignore_unparseable: bool,
 ) -> Result<Vec<ParsedFile>> {
     // Parse the input files.
     let mut syntax_trees = vec![];
@@ -277,23 +278,40 @@ pub fn build_syntax_tree(
         let bundle_include_dirs: Vec<_> = bundle.include_dirs.iter().map(Path::new).collect();
         let bundle_defines = defines_to_sv_parser(&bundle.defines);
 
-        // For each file in the file bundle preprocess and parse it.
-        // Use a neat trick of `collect` here, which allows you to collect a
-        // `Result<T>` iterator into a `Result<Vec<T>>`, i.e. bubbling up the
-        // error.
-        let v: Result<Vec<ParsedFile>> = bundle
-            .files
-            .par_iter()
-            .map(|filename| -> Result<_> {
-                parse_file(
-                    filename,
-                    &bundle_include_dirs,
-                    &bundle_defines,
-                    strip_comments,
-                )
-            })
-            .collect();
-        syntax_trees.extend(v?);
+        if ignore_unparseable {
+            let v: Vec<ParsedFile> = bundle
+                .files
+                .par_iter()
+                .map(|filename| -> Result<_> {
+                    parse_file(
+                        filename,
+                        &bundle_include_dirs,
+                        &bundle_defines,
+                        strip_comments,
+                    )
+                })
+                .filter_map(|r| r.map_err(|e| warn!("Unable to parse {:?}", e)).ok())
+                .collect();
+            syntax_trees.extend(v);
+        } else {
+            // For each file in the file bundle preprocess and parse it.
+            // Use a neat trick of `collect` here, which allows you to collect a
+            // `Result<T>` iterator into a `Result<Vec<T>>`, i.e. bubbling up the
+            // error.
+            let v: Result<Vec<ParsedFile>> = bundle
+                .files
+                .par_iter()
+                .map(|filename| -> Result<_> {
+                    parse_file(
+                        filename,
+                        &bundle_include_dirs,
+                        &bundle_defines,
+                        strip_comments,
+                    )
+                })
+                .collect();
+            syntax_trees.extend(v?);
+        }
     }
 
     Ok(syntax_trees)

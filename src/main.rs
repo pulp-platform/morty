@@ -156,6 +156,11 @@ fn main() -> Result<()> {
                 .help("Output a DOT graph of the parsed modules")
                 .takes_value(true),
         )
+        .arg(
+            Arg::new("ignore_unparseable")
+                .short('i')
+                .help("Ignore files that cannot be parsed"),
+        )
         .get_matches();
 
     let logger_level = matches.occurrences_of("v");
@@ -270,7 +275,11 @@ fn main() -> Result<()> {
 
     let strip_comments = matches.is_present("strip_comments");
 
-    let syntax_trees = build_syntax_tree(&file_list, strip_comments)?;
+    let syntax_trees = build_syntax_tree(
+        &file_list,
+        strip_comments,
+        matches.is_present("ignore_unparseable"),
+    )?;
 
     let out = match matches.value_of("output") {
         Some(file) => {
