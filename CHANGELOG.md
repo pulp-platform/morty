@@ -5,6 +5,8 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
+
+## 0.8.0 - 2022-08-26
 ### Added
 - Add `Compiled by morty` comment to output files (with version and datetime)
 - `top_module` parameter to restrict pickled output and output manifest to the needed files for module hierarchy

@@ -290,7 +290,7 @@ pub fn build_syntax_tree(
                         strip_comments,
                     )
                 })
-                .filter_map(|r| r.map_err(|e| warn!("Unable to parse {:?}", e)).ok())
+                .filter_map(|r| r.map_err(|e| warn!("Continuing with {:?}", e)).ok())
                 .collect();
             syntax_trees.extend(v);
         } else {
