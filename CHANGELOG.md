@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ### Added
 - Add `Compiled by morty` comment to output files (with version and datetime)
 - `top_module` parameter to restrict pickled output and output manifest to the needed files for module hierarchy
+- Add `-i` flag to ignore unparseable files
 
 ## 0.7.0 - 2022-08-09
 ### Fixed
