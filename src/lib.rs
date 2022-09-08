@@ -611,6 +611,16 @@ impl<'a> Pickle<'a> {
                         self.load_library_module(&inst_name, library_files);
                     }
                 }
+                RefNode::ClassScope(x) => {
+                    let id = unwrap_node!(x, SimpleIdentifier).unwrap();
+                    self.register_instantiation_with_parent(syntax_tree, id.clone(), parent_name);
+
+                    let (inst_name, _) = get_identifier(syntax_tree, id);
+                    if !self.rename_table.contains_key(&inst_name) {
+                        info!("Could not find {}, checking libraries...", &inst_name);
+                        self.load_library_module(&inst_name, library_files);
+                    }
+                }
                 _ => (),
             }
         }
