@@ -93,7 +93,7 @@ pub fn do_pickle<'a>(
                             &pf.ast,
                             unwrap_node!(package_import, SimpleIdentifier).unwrap(),
                         );
-                        warn!(
+                        eprintln!(
                             "Global package import in {}:\n\t{}",
                             &pf.path,
                             &pf.source[Locate::try_from(x).unwrap().offset
@@ -505,7 +505,7 @@ impl<'a> Pickle<'a> {
     /// Register a declaration such as a package or module.
     pub fn register_declaration(&mut self, syntax_tree: &SyntaxTree, id: RefNode, file: String) {
         let (module_name, loc) = get_identifier(syntax_tree, id);
-        println!("module_name: {:?}", module_name);
+        info!("module_name: {:?}", module_name);
         self.module_graph_nodes.insert(
             module_name.clone(),
             self.module_graph.add_node(module_name.clone()),
@@ -624,12 +624,6 @@ impl<'a> Pickle<'a> {
                 _ => (),
             }
         }
-
-        // for id.into_iter()
-        // .into_iter()
-        // .map(|sub_node| unwrap_node!(sub_node, SimpleIdentifier, EscapedIdentifier))
-        // .flatten()
-        // .any(|id| id == unwrapped_node)
     }
 
     /// Register a usage of the identifier.
@@ -899,7 +893,7 @@ pub fn get_calling_module(st: &SyntaxTree, node: RefNode) -> Option<(String, Loc
     }
     // println!("{}", st);
     // println!("{:?}", loc0);
-    println!("Possible global package import, not properly parsed! TODO MICHAERO better error reporting to fix issue, link all modules/packages/interfaces in file to the dependency.");
+    eprintln!("Possible global package import, not properly parsed! TODO MICHAERO better error reporting to fix issue, link all modules/packages/interfaces in file to the dependency.");
     // panic!("No calling module found.");
     None
 }
