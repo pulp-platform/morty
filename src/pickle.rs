@@ -604,8 +604,8 @@ impl Pickle {
             )
             .unwrap();
             let found_locate = match node_named {
-                RefNode::SimpleIdentifier(x) => Locate::try_from(x).unwrap(),
-                RefNode::EscapedIdentifier(x) => Locate::try_from(x).unwrap(),
+                RefNode::SimpleIdentifier(x) => x.nodes.0,
+                RefNode::EscapedIdentifier(x) => x.nodes.0,
                 _ => unimplemented!(),
             };
 
@@ -628,8 +628,8 @@ impl Pickle {
                 )
                 .unwrap();
                 let use_final_locate = match use_identifier {
-                    RefNode::SimpleIdentifier(x) => Locate::try_from(x).unwrap(),
-                    RefNode::EscapedIdentifier(x) => Locate::try_from(x).unwrap(),
+                    RefNode::SimpleIdentifier(x) => x.nodes.0,
+                    RefNode::EscapedIdentifier(x) => x.nodes.0,
                     _ => unimplemented!(),
                 };
                 self.replace_table
