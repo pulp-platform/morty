@@ -201,6 +201,13 @@ fn main() -> Result<()> {
                 .num_args(0)
                 .action(ArgAction::SetTrue),
         )
+        .arg(
+            Arg::new("no_intf")
+                .long("no_intf")
+                .help("Flatten all interfaces (no task support)")
+                .num_args(0)
+                .action(ArgAction::SetTrue),
+        )
         .get_matches();
 
     let logger_level = matches.get_count("v");
@@ -443,6 +450,10 @@ fn main() -> Result<()> {
     //   - replace interfaces
     //   - replace impossible parameters
     //   - replace types (and uniquify/elaborate)
+
+    if matches.get_flag("no_intf") {
+        pickle.flatten_interfaces()?;
+    }
 
     if matches.get_one::<String>("top_module").is_some() {
         pickle.get_pickle(out, exclude)?;

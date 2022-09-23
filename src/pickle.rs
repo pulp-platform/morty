@@ -8,6 +8,7 @@ use crate::{
 };
 use anyhow::{anyhow, Context, Error, Result};
 use chrono::Local;
+use indexmap::IndexMap;
 use petgraph::algo::dijkstra;
 use petgraph::graph::{Graph, NodeIndex};
 use petgraph::{Incoming, Outgoing};
@@ -16,7 +17,9 @@ use std::convert::TryFrom;
 use std::io::Write;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
-use sv_parser::{parse_sv_pp, preprocess, unwrap_node, Defines, Locate, RefNode};
+use sv_parser::{
+    parse_sv_pp, preprocess, unwrap_node, Defines, Locate, PortDirection, RefNode, WhiteSpace,
+};
 
 /// Struct used for transformations
 #[derive(Debug)]
@@ -558,6 +561,309 @@ impl Pickle {
         Ok(())
     }
 
+    fn collect_intf_information(
+        &self,
+        intf_name: String,
+        intf_declaration: RefNode,
+        file_id: usize,
+    ) -> Result<InterfaceReplacement> {
+        let mut replacement = InterfaceReplacement {
+            name: intf_name,
+            parameters: IndexMap::new(),
+            types: IndexMap::new(),
+            signals: HashMap::new(),
+            modports: HashMap::new(),
+        };
+
+        for node in intf_declaration {
+            match node {
+                // parameters
+                RefNode::ParameterPortDeclaration(x) => {
+                    let mut param_type = "".to_string();
+                    let mut param_identifier = "".to_string();
+                    let mut param_default = None;
+                    for param_node in x {
+                        match param_node {
+                            RefNode::DataTypeOrImplicit(y) => {
+                                param_type = match Locate::try_from(y) {
+                                    Ok(loc) => self.get_str(file_id, &loc),
+                                    Err(_) => "".to_string(),
+                                }
+                            }
+                            RefNode::ParameterIdentifier(y) => {
+                                param_identifier =
+                                    self.get_str(file_id, &Locate::try_from(y).unwrap())
+                            }
+                            RefNode::ConstantParamExpression(y) => {
+                                param_default = match Locate::try_from(y) {
+                                    Ok(loc) => Some(self.get_str(file_id, &loc)),
+                                    Err(_) => None,
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                    replacement
+                        .parameters
+                        .insert(param_identifier, (param_type, param_default));
+                }
+                RefNode::NonPortInterfaceItem(x) => {
+                    for item_node in x {
+                        match item_node {
+                            // localparam
+                            RefNode::LocalParameterDeclaration(lp_node) => {
+                                let mut param_type = "".to_string();
+                                let mut param_identifier = "".to_string();
+                                let mut param_default = None;
+                                for param_node in lp_node {
+                                    match param_node {
+                                        RefNode::DataTypeOrImplicit(y) => {
+                                            param_type = match Locate::try_from(y) {
+                                                Ok(loc) => self.get_str(file_id, &loc),
+                                                Err(_) => "".to_string(),
+                                            }
+                                        }
+                                        RefNode::ParameterIdentifier(y) => {
+                                            param_identifier =
+                                                self.get_str(file_id, &Locate::try_from(y).unwrap())
+                                        }
+                                        RefNode::ConstantParamExpression(y) => {
+                                            param_default = match Locate::try_from(y) {
+                                                Ok(loc) => Some(self.get_str(file_id, &loc)),
+                                                Err(_) => None,
+                                            }
+                                        }
+                                        _ => {}
+                                    }
+                                }
+                                replacement
+                                    .parameters
+                                    .insert(param_identifier, (param_type, param_default));
+                            }
+                            // typedef
+                            RefNode::TypeDeclarationDataType(y) => {
+                                let type_ident =
+                                    self.get_str(file_id, &Locate::try_from(&y.nodes.2).unwrap());
+                                let type_def =
+                                    self.get_str(file_id, &Locate::try_from(&y.nodes.1).unwrap());
+                                replacement.types.insert(type_ident, type_def);
+                            }
+                            // signals
+                            RefNode::NetDeclaration(y) => {
+                                let net_type = match unwrap_node!(y, NetTypeIdentifier) {
+                                    Some(RefNode::NetTypeIdentifier(z)) => {
+                                        self.get_str(file_id, &Locate::try_from(z).unwrap())
+                                    }
+                                    _ => {
+                                        warn!(
+                                            "assuming logic for {:?}",
+                                            self.get_str(file_id, &Locate::try_from(y).unwrap())
+                                        );
+                                        "logic".to_string()
+                                    }
+                                };
+                                let net_names = match unwrap_node!(y, ListOfNetDeclAssignments) {
+                                    Some(RefNode::ListOfNetDeclAssignments(z)) => Ok(z
+                                        .nodes
+                                        .0
+                                        .contents()
+                                        .iter()
+                                        .map(|variable| {
+                                            match unwrap_node!(
+                                                *variable,
+                                                SimpleIdentifier,
+                                                EscapedIdentifier
+                                            )
+                                            .unwrap()
+                                            {
+                                                RefNode::SimpleIdentifier(a) => {
+                                                    self.get_str(file_id, &a.nodes.0)
+                                                }
+                                                RefNode::EscapedIdentifier(a) => {
+                                                    self.get_str(file_id, &a.nodes.0)
+                                                }
+                                                _ => todo!(),
+                                            }
+                                        })
+                                        .collect::<Vec<_>>()),
+                                    _ => Err(anyhow!(
+                                        "unable to find name: {:?}",
+                                        self.get_str(file_id, &Locate::try_from(y).unwrap())
+                                    )),
+                                }?;
+                                for net_name in net_names {
+                                    replacement.signals.insert(net_name, net_type.clone());
+                                }
+                            }
+                            RefNode::DataDeclarationVariable(y) => {
+                                let net_type = match unwrap_node!(y, DataType) {
+                                    Some(RefNode::DataType(z)) => {
+                                        self.get_str(file_id, &Locate::try_from(z).unwrap())
+                                    }
+                                    _ => {
+                                        warn!(
+                                            "assuming logic for {:?}",
+                                            self.get_str(file_id, &Locate::try_from(y).unwrap())
+                                        );
+                                        "logic".to_string()
+                                    }
+                                };
+                                let net_names = match unwrap_node!(y, ListOfVariableDeclAssignments)
+                                {
+                                    Some(RefNode::ListOfVariableDeclAssignments(z)) => Ok(z
+                                        .nodes
+                                        .0
+                                        .contents()
+                                        .iter()
+                                        .map(|variable| {
+                                            match unwrap_node!(
+                                                *variable,
+                                                SimpleIdentifier,
+                                                EscapedIdentifier
+                                            )
+                                            .unwrap()
+                                            {
+                                                RefNode::SimpleIdentifier(a) => {
+                                                    self.get_str(file_id, &a.nodes.0)
+                                                }
+                                                RefNode::EscapedIdentifier(a) => {
+                                                    self.get_str(file_id, &a.nodes.0)
+                                                }
+                                                _ => todo!(),
+                                            }
+                                        })
+                                        .collect::<Vec<_>>()),
+                                    _ => Err(anyhow!(
+                                        "unable to find name: {:?}",
+                                        self.get_str(file_id, &Locate::try_from(y).unwrap())
+                                    )),
+                                }?;
+                                for net_name in net_names {
+                                    replacement.signals.insert(net_name, net_type.clone());
+                                }
+                            }
+                            RefNode::ModportDeclaration(y) => {
+                                let modport_name = match unwrap_node!(
+                                    match unwrap_node!(y, ModportIdentifier).unwrap() {
+                                        RefNode::ModportIdentifier(z) => z,
+                                        _ => unreachable!(),
+                                    },
+                                    SimpleIdentifier,
+                                    EscapedIdentifier
+                                )
+                                .unwrap()
+                                {
+                                    RefNode::SimpleIdentifier(a) => {
+                                        self.get_str(file_id, &a.nodes.0)
+                                    }
+                                    RefNode::EscapedIdentifier(a) => {
+                                        self.get_str(file_id, &a.nodes.0)
+                                    }
+                                    _ => unreachable!(),
+                                };
+                                let mut modport_ports = Vec::new();
+                                let mut dir = "".to_string();
+                                for mod_node in y {
+                                    match mod_node {
+                                        RefNode::PortDirection(z) => {
+                                            dir = match z {
+                                                PortDirection::Input(_) => "input".to_string(),
+                                                PortDirection::Output(_) => "output".to_string(),
+                                                PortDirection::Inout(_) => "inout".to_string(),
+                                                PortDirection::Ref(_) => "ref".to_string(),
+                                            };
+                                        }
+                                        RefNode::ModportSimplePort(z) => {
+                                            let port_name = match unwrap_node!(
+                                                z,
+                                                SimpleIdentifier,
+                                                EscapedIdentifier
+                                            )
+                                            .unwrap()
+                                            {
+                                                RefNode::SimpleIdentifier(a) => {
+                                                    self.get_str(file_id, &a.nodes.0)
+                                                }
+                                                RefNode::EscapedIdentifier(a) => {
+                                                    self.get_str(file_id, &a.nodes.0)
+                                                }
+                                                _ => unreachable!(),
+                                            };
+                                            modport_ports.push((port_name, dir.clone()));
+                                        }
+                                        _ => {}
+                                    }
+                                }
+
+                                replacement.modports.insert(modport_name, modport_ports);
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+
+                _ => {}
+            }
+        }
+
+        Ok(replacement)
+    }
+
+    /// Flatten interfaces
+    pub fn flatten_interfaces(&mut self) -> Result<()> {
+        let intf = self
+            .declarations
+            .iter()
+            .filter(|(_, info)| info.0 == SVConstructType::Interface)
+            .collect::<HashMap<_, _>>();
+
+        for (intf_name, intf_location) in intf {
+            println!("Flattening {:?}", intf_name);
+
+            let intf_declaration = self.get_node_from_locate(intf_location.1, intf_location.2)?;
+
+            // Collected needed info from declaration
+
+            let replacement = self.collect_intf_information(
+                intf_name.to_string(),
+                intf_declaration,
+                intf_location.1,
+            );
+
+            println!("{:?}", replacement);
+
+            // Collected needed info from declaration: parameters, types, signals, modports -> put into new type
+            // Find bus instantiations
+            //   - replace instantiation with needed signal declarations
+            //   - ensure locally used signals are appropriately renamed and connected
+            // Find module port usages
+            //   - replace with modport signals of declaration - pass parameters
+            //   - ensure locally used signals are appropriately renamed
+            // This one might need some figuring out
+            //   - replace module instantiation interfaces with required flat signals - pass parameters correctly!
+
+            // testing
+            // if intf_name == "AXI_BUS" {
+            //     println!("{:?}", self.get_node_from_locate(intf_location.1, intf_location.2)?);
+            //     println!("Instantiations");
+            //     for item in &self.usages[intf_name] {
+            //         println!("{:?}", self.get_node_from_locate(item.0, item.1)?);
+            //     }
+
+            // }
+        }
+
+        Ok(())
+    }
+
+    fn get_str(&self, file_id: usize, location: &Locate) -> String {
+        self.all_files[file_id]
+            .ast
+            .get_str(location)
+            .unwrap()
+            .to_string()
+    }
+
     fn get_node_from_locate(&self, file_id: usize, location: Locate) -> Result<RefNode> {
         let node = self.all_files[file_id].ast.into_iter().find(|x|
             match x {
@@ -624,8 +930,11 @@ impl Pickle {
                 _ => unimplemented!(),
             };
 
+            // Add declaration rename
             self.replace_table
                 .push((module.1, found_locate, new_string.to_string()));
+
+            // TODO: add `endmodule : name` rename
 
             for (use_file_id, use_locate) in &self.usages[name] {
                 let use_node = self.get_node_from_locate(*use_file_id, *use_locate)?;
@@ -647,10 +956,14 @@ impl Pickle {
                     RefNode::EscapedIdentifier(x) => x.nodes.0,
                     _ => unimplemented!(),
                 };
+
+                // Add instantiation rename
                 self.replace_table
                     .push((*use_file_id, use_final_locate, new_string.to_string()))
             }
         }
+
+        println!("{:?}", self.replace_table);
 
         Ok(())
     }
@@ -683,11 +996,7 @@ impl Pickle {
             }
         }
 
-        let needed_string = self.all_files[file_id]
-            .ast
-            .get_str(&location)
-            .unwrap()
-            .to_string();
+        let needed_string = self.get_str(file_id, &location);
 
         let mut out_string = "".to_owned();
         let mut pos = 0;
@@ -922,4 +1231,14 @@ pub enum SVConstructType {
     Interface,
     Package,
     _Class,
+}
+
+/// Struct to assist with interface replacement
+#[derive(Debug)]
+struct InterfaceReplacement {
+    pub name: String,
+    pub parameters: IndexMap<String, (String, Option<String>)>,
+    pub types: IndexMap<String, String>,
+    pub signals: HashMap<String, String>,
+    pub modports: HashMap<String, Vec<(String, String)>>,
 }

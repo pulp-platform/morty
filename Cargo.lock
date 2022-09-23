@@ -458,6 +458,7 @@ dependencies = [
  "chrono",
  "clap",
  "colored",
+ "indexmap",
  "log",
  "petgraph",
  "pulldown-cmark",
