@@ -88,10 +88,22 @@ pub fn do_pickle<'a>(
             .into_iter()
             .filter_map(|node| {
                 if let RefNode::DescriptionPackageItem(x) = node {
-                    let (name, _loc) =
-                        get_identifier(&pf.ast, unwrap_node!(x, SimpleIdentifier).unwrap());
-                    warn!("Global package import in {}", &pf.path);
-                    Some(name)
+                    if let Some(package_import) = unwrap_node!(x, PackageImportDeclaration) {
+                        let (name, _loc) = get_identifier(
+                            &pf.ast,
+                            unwrap_node!(package_import, SimpleIdentifier).unwrap(),
+                        );
+                        warn!(
+                            "Global package import in {}:\n\t{}",
+                            &pf.path,
+                            &pf.source[Locate::try_from(x).unwrap().offset
+                                ..(Locate::try_from(x).unwrap().offset
+                                    + Locate::try_from(x).unwrap().len)]
+                        );
+                        Some(name)
+                    } else {
+                        None
+                    }
                 } else {
                     None
                 }
