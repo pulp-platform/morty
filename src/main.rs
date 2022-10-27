@@ -146,7 +146,7 @@ fn main() -> Result<()> {
             Arg::new("top_module")
                 .long("top")
                 .value_name("TOP_MODULE")
-                .help("Top module, strip all unneeded modules")
+                .help("Top module, strips all unneeded files. Incompatible with `--propagate_defines`.")
                 .takes_value(true),
         )
         .arg(
@@ -168,11 +168,13 @@ fn main() -> Result<()> {
         )
         .arg(
             Arg::new("propagate_defines")
-                .help("Propagate defines from first files to the following files. Incompatible with `--top`."),
+                .long("propagate_defines")
+                .help("Propagate defines from first files to the following files. Enables sequential."),
         )
         .arg(
             Arg::new("sequential")
                 .short('q')
+                .long("sequential")
                 .help("Enforce sequential processing of files. Slows down performance, but can avoid STACK_OVERFLOW.")
         )
         .get_matches();
@@ -332,6 +334,7 @@ fn main() -> Result<()> {
         out,
         matches.value_of("top_module"),
         matches.contains_id("keep_defines"),
+        matches.is_present("propagate_defines"),
     )?;
 
     if let Some(graph_file) = matches.value_of("graph_file") {

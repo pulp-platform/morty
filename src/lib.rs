@@ -40,6 +40,7 @@ pub fn do_pickle<'a>(
     mut out: Box<dyn Write>,
     top_module: Option<&'a str>,
     keep_defines: bool,
+    propagate_defines: bool,
 ) -> Result<Pickle<'a>> {
     let mut pickle = Pickle::new(
         // Collect renaming options.
@@ -191,11 +192,15 @@ pub fn do_pickle<'a>(
     )
     .unwrap();
 
-    match top_module {
-        Some(top) => {
+    if let Some(top) = top_module {
+        if !propagate_defines {
             pickle.prune_graph(top)?;
+        } else {
+            warn!(
+                "Not pruning for top_module {} due to propagate_defines.",
+                top
+            );
         }
-        None => {}
     }
 
     let needed_files = pickle
