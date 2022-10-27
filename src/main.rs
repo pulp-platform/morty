@@ -166,6 +166,11 @@ fn main() -> Result<()> {
                 .long("keep_defines")
                 .help("Prevents removal of `define statements."),
         )
+        .arg(
+            Arg::new("sequential")
+                .short('q')
+                .help("Enforce sequential processing of files. Slows down performance, but can avoid STACK_OVERFLOW.")
+        )
         .get_matches();
 
     let logger_level = matches.occurrences_of("v");
@@ -284,6 +289,7 @@ fn main() -> Result<()> {
         &file_list,
         strip_comments,
         matches.is_present("ignore_unparseable"),
+        matches.is_present("sequential"),
     )?;
 
     let out = match matches.value_of("output") {

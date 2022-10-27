@@ -313,6 +313,7 @@ pub fn build_syntax_tree(
     file_list: &Vec<FileBundle>,
     strip_comments: bool,
     ignore_unparseable: bool,
+    force_sequential: bool,
 ) -> Result<Vec<ParsedFile>> {
     // Parse the input files.
     let mut syntax_trees = vec![];
@@ -325,20 +326,36 @@ pub fn build_syntax_tree(
         // Use a neat trick of `collect` here, which allows you to collect a
         // `Result<T>` iterator into a `Result<Vec<T>>`, i.e. bubbling up the
         // error.
-        let v = bundle.files.par_iter().map(|filename| -> Result<_> {
-            parse_file(
-                filename,
-                &bundle_include_dirs,
-                &bundle_defines,
-                strip_comments,
-            )
-        });
-
-        let v = if ignore_unparseable {
-            v.filter_map(|r| r.map_err(|e| warn!("Continuing with {:?}", e)).ok())
-                .collect()
+        let v = if force_sequential {
+            let tmp = bundle.files.iter().map(|filename| -> Result<_> {
+                parse_file(
+                    filename,
+                    &bundle_include_dirs,
+                    &bundle_defines,
+                    strip_comments,
+                )
+            });
+            if ignore_unparseable {
+                tmp.filter_map(|r| r.map_err(|e| warn!("Continuing with {:?}", e)).ok())
+                    .collect()
+            } else {
+                tmp.collect::<Result<Vec<ParsedFile>>>()?
+            }
         } else {
-            v.collect::<Result<Vec<ParsedFile>>>()?
+            let tmp = bundle.files.par_iter().map(|filename| -> Result<_> {
+                parse_file(
+                    filename,
+                    &bundle_include_dirs,
+                    &bundle_defines,
+                    strip_comments,
+                )
+            });
+            if ignore_unparseable {
+                tmp.filter_map(|r| r.map_err(|e| warn!("Continuing with {:?}", e)).ok())
+                    .collect()
+            } else {
+                tmp.collect::<Result<Vec<ParsedFile>>>()?
+            }
         };
         syntax_trees.extend(v);
     }
