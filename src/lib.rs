@@ -24,7 +24,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use sv_parser::Error as SvParserError;
 use sv_parser::{
-    parse_sv_pp, preprocess, unwrap_node, Define, DefineText, Locate, RefNode, SyntaxTree,
+    parse_sv_pp, preprocess, unwrap_node, Define, DefineText, Defines, Locate, RefNode, SyntaxTree,
 };
 
 pub mod doc;
@@ -313,27 +313,39 @@ pub fn build_syntax_tree(
     file_list: &Vec<FileBundle>,
     strip_comments: bool,
     ignore_unparseable: bool,
+    propagate_defines: bool,
     force_sequential: bool,
 ) -> Result<Vec<ParsedFile>> {
     // Parse the input files.
     let mut syntax_trees = vec![];
 
+    let mut internal_defines: Defines = HashMap::new();
+
     for bundle in file_list {
         let bundle_include_dirs: Vec<_> = bundle.include_dirs.iter().map(Path::new).collect();
-        let bundle_defines = defines_to_sv_parser(&bundle.defines);
+
+        if propagate_defines {
+            internal_defines.extend(defines_to_sv_parser(&bundle.defines));
+        } else {
+            internal_defines = defines_to_sv_parser(&bundle.defines);
+        }
 
         // For each file in the file bundle preprocess and parse it.
         // Use a neat trick of `collect` here, which allows you to collect a
         // `Result<T>` iterator into a `Result<Vec<T>>`, i.e. bubbling up the
         // error.
-        let v = if force_sequential {
+        let v = if force_sequential | propagate_defines {
             let tmp = bundle.files.iter().map(|filename| -> Result<_> {
-                parse_file(
+                let pf = parse_file(
                     filename,
                     &bundle_include_dirs,
-                    &bundle_defines,
+                    &internal_defines,
                     strip_comments,
-                )
+                )?;
+                if propagate_defines {
+                    internal_defines.extend(pf.defines.clone());
+                }
+                Ok(pf)
             });
             if ignore_unparseable {
                 tmp.filter_map(|r| r.map_err(|e| warn!("Continuing with {:?}", e)).ok())
@@ -346,7 +358,7 @@ pub fn build_syntax_tree(
                 parse_file(
                     filename,
                     &bundle_include_dirs,
-                    &bundle_defines,
+                    &internal_defines,
                     strip_comments,
                 )
             });
@@ -772,9 +784,7 @@ pub fn lib_module(p: &Path) -> Option<String> {
 }
 
 // Convert the preprocessor defines into the appropriate format which is understood by `sv-parser`
-pub fn defines_to_sv_parser(
-    defines: &HashMap<String, Option<String>>,
-) -> HashMap<String, Option<Define>> {
+pub fn defines_to_sv_parser(defines: &HashMap<String, Option<String>>) -> Defines {
     return defines
         .iter()
         .map(|(name, value)| {
@@ -809,19 +819,18 @@ pub fn parse_file(
     .with_context(|| format!("Failed to preprocess `{}`", filename))?;
 
     let buffer = pp.0.text().to_string();
-    let syntax_tree = parse_sv_pp(pp.0, pp.1, false)
-        .or_else(|err| -> Result<_> {
-            let printer = Arc::new(Mutex::new(printer::Printer::new()));
-            let printer = &mut *printer.lock().unwrap();
-            print_parse_error(printer, &err, false)?;
-            Err(Error::new(err))
-        })?
-        .0;
+    let syntax_tree = parse_sv_pp(pp.0, pp.1, false).or_else(|err| -> Result<_> {
+        let printer = Arc::new(Mutex::new(printer::Printer::new()));
+        let printer = &mut *printer.lock().unwrap();
+        print_parse_error(printer, &err, false)?;
+        Err(Error::new(err))
+    })?;
 
     Ok(ParsedFile {
         path: String::from(filename),
         source: buffer,
-        ast: syntax_tree,
+        ast: syntax_tree.0,
+        defines: syntax_tree.1,
     })
 }
 
@@ -991,6 +1000,8 @@ pub struct ParsedFile {
     pub source: String,
     /// The parsed AST of the file.
     pub ast: SyntaxTree,
+    /// Internal defines
+    pub defines: Defines,
 }
 
 #[cfg_attr(tarpaulin, skip)]

@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ## Unreleased
 ### Added
 - Add switch to disable parallel file parsing (can help with STACKOVERFLOW)
+- Add switch to propagate defines from parsed files to subsequent files
 
 ### Fixed
 - correct global package parsing

@@ -167,6 +167,10 @@ fn main() -> Result<()> {
                 .help("Prevents removal of `define statements."),
         )
         .arg(
+            Arg::new("propagate_defines")
+                .help("Propagate defines from first files to the following files. Incompatible with `--top`."),
+        )
+        .arg(
             Arg::new("sequential")
                 .short('q')
                 .help("Enforce sequential processing of files. Slows down performance, but can avoid STACK_OVERFLOW.")
@@ -289,6 +293,7 @@ fn main() -> Result<()> {
         &file_list,
         strip_comments,
         matches.is_present("ignore_unparseable"),
+        matches.is_present("propagate_defines"),
         matches.is_present("sequential"),
     )?;
 
