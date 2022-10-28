@@ -193,14 +193,14 @@ pub fn do_pickle<'a>(
     .unwrap();
 
     if let Some(top) = top_module {
-        if !propagate_defines {
-            pickle.prune_graph(top)?;
-        } else {
+        if propagate_defines {
             warn!(
-                "Not pruning for top_module {} due to propagate_defines.",
+                "Pickle might be non-functional as some files can be excluded due to use of --top={}.\
+                \n\tThis might lead to required components being excluded. Use at your own risk!!!",
                 top
             );
         }
+        pickle.prune_graph(top)?;
     }
 
     let needed_files = pickle

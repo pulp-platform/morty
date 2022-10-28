@@ -146,7 +146,7 @@ fn main() -> Result<()> {
             Arg::new("top_module")
                 .long("top")
                 .value_name("TOP_MODULE")
-                .help("Top module, strips all unneeded files. Incompatible with `--propagate_defines`.")
+                .help("Top module, strips all unneeded files. May be incompatible with `--propagate_defines`.")
                 .takes_value(true),
         )
         .arg(
