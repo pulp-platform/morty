@@ -41,6 +41,7 @@ pub fn do_pickle<'a>(
     top_module: Option<&'a str>,
     keep_defines: bool,
     propagate_defines: bool,
+    remove_timeunits: bool,
 ) -> Result<Pickle<'a>> {
     let mut pickle = Pickle::new(
         // Collect renaming options.
@@ -255,6 +256,14 @@ pub fn do_pickle<'a>(
                 RefNode::PackageDeclaration(x) => {
                     let id = unwrap_node!(x, SimpleIdentifier).unwrap();
                     pickle.register_exclude(&pf.ast, id, Locate::try_from(x).unwrap())
+                }
+                RefNode::TimeunitsDeclaration(x) => {
+                    let loc = Locate::try_from(x).unwrap();
+                    if remove_timeunits {
+                        pickle
+                            .replace_table
+                            .push((loc.offset, loc.len, "".to_string()));
+                    }
                 }
                 _ => (),
             }

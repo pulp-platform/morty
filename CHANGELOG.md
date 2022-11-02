@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ### Changed
 - remove defines from pickled output, with flag to keep
+- remove `timeunit` and `timeprecision` from pickle, with flag to keep
 
 ## 0.8.0 - 2022-08-26
 ### Added

@@ -177,6 +177,11 @@ fn main() -> Result<()> {
                 .long("sequential")
                 .help("Enforce sequential processing of files. Slows down performance, but can avoid STACK_OVERFLOW.")
         )
+        .arg(
+            Arg::new("keep_timeunits")
+                .long("keep_timeunits")
+                .help("Keeps timeunits declared throughout the design, may result in bad pickles.")
+        )
         .get_matches();
 
     let logger_level = matches.occurrences_of("v");
@@ -335,6 +340,7 @@ fn main() -> Result<()> {
         matches.value_of("top_module"),
         matches.contains_id("keep_defines"),
         matches.is_present("propagate_defines"),
+        !matches.is_present("keep_timeunits"),
     )?;
 
     if let Some(graph_file) = matches.value_of("graph_file") {
