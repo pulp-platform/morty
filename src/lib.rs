@@ -39,6 +39,7 @@ pub fn do_pickle<'a>(
     mut syntax_trees: Vec<ParsedFile>,
     mut out: Box<dyn Write>,
     top_module: Option<&'a str>,
+    keep_defines: bool,
 ) -> Result<Pickle<'a>> {
     let mut pickle = Pickle::new(
         // Collect renaming options.
@@ -253,17 +254,47 @@ pub fn do_pickle<'a>(
                 _ => (),
             }
         }
+
+        // Find macros to be removed
+        let mut new_replace_table = Vec::new();
+
+        if !keep_defines {
+            for node in &pf.ast {
+                match node {
+                    RefNode::TextMacroDefinition(x) => {
+                        let loc = Locate::try_from(x).unwrap();
+                        new_replace_table.push((loc.offset, loc.len, "".to_string()));
+                    }
+                    _ => (),
+                }
+            }
+        }
+
+        new_replace_table.append(&mut pickle.replace_table);
+
+        // sort replace table
+        new_replace_table.sort_by(|a, b| a.0.cmp(&b.0));
+
+        // Error on overlapping -> correct overlapping!
+        for i in 0..new_replace_table.len() - 1 {
+            if new_replace_table[i].0 + new_replace_table[i].1 > new_replace_table[i + 1].0 {
+                eprintln!(
+                    "Offset error, please contact Michael\n{:?}",
+                    new_replace_table[i]
+                );
+            }
+        }
+
         // Replace according to `replace_table`.
         // Apply the replacements.
-        debug!("Replace Table: {:?}", pickle.replace_table);
+        debug!("Replace Table: {:?}", new_replace_table);
         let mut pos = 0;
-        for (offset, len, repl) in pickle.replace_table.iter() {
+        for (offset, len, repl) in new_replace_table.iter() {
             // Because we are partially stripping modules it can be the case that we don't need to apply some of the upcoming replacements.
             if pos > *offset {
                 continue;
             }
             trace!("Replacing: {},{}, {}", offset, len, repl);
-            // TODO MICHAERO: optionally remove define blocks -> all defines are already inserted, so define statements should not be needed
             write!(out, "{}", &pf.source[pos..*offset]).unwrap();
             write!(out, "{}", repl).unwrap();
             pos = offset + len;

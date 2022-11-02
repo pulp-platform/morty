@@ -161,6 +161,11 @@ fn main() -> Result<()> {
                 .short('i')
                 .help("Ignore files that cannot be parsed"),
         )
+        .arg(
+            Arg::new("keep_defines")
+                .long("keep_defines")
+                .help("Prevents removal of `define statements."),
+        )
         .get_matches();
 
     let logger_level = matches.occurrences_of("v");
@@ -315,6 +320,7 @@ fn main() -> Result<()> {
         syntax_trees,
         out,
         matches.value_of("top_module"),
+        matches.contains_id("keep_defines"),
     )?;
 
     if let Some(graph_file) = matches.value_of("graph_file") {
