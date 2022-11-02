@@ -31,14 +31,14 @@ pub mod doc;
 mod printer;
 
 pub fn do_pickle<'a>(
-    prefix: Option<&'a str>,
-    suffix: Option<&'a str>,
-    exclude_rename: HashSet<&'a str>,
-    exclude: HashSet<&'a str>,
+    prefix: Option<&'a String>,
+    suffix: Option<&'a String>,
+    exclude_rename: HashSet<&'a String>,
+    exclude: HashSet<&'a String>,
     library_bundle: LibraryBundle,
     mut syntax_trees: Vec<ParsedFile>,
     mut out: Box<dyn Write>,
-    top_module: Option<&'a str>,
+    top_module: Option<&'a String>,
     keep_defines: bool,
     propagate_defines: bool,
     remove_timeunits: bool,
@@ -417,7 +417,7 @@ pub fn write_manifest(
     file_list: Vec<FileBundle>,
     include_dirs: Vec<String>,
     defines: HashMap<String, Option<String>>,
-    top_module: Option<&str>,
+    top_module: Option<&String>,
 ) -> Result<()> {
     let mut undef_modules = Vec::new();
 
@@ -511,13 +511,13 @@ pub fn write_dot_graph(pickle: &Pickle, graph_file: &str) -> Result<()> {
 #[derive(Debug)]
 pub struct Pickle<'a> {
     /// Optional name prefix.
-    pub prefix: Option<&'a str>,
+    pub prefix: Option<&'a String>,
     /// Optional name suffix.
-    pub suffix: Option<&'a str>,
+    pub suffix: Option<&'a String>,
     /// Declarations which are excluded from re-naming.
-    pub exclude_rename: HashSet<&'a str>,
+    pub exclude_rename: HashSet<&'a String>,
     /// Declarations which are excluded from the pickled sources.
-    pub exclude: HashSet<&'a str>,
+    pub exclude: HashSet<&'a String>,
     /// Table containing thing that should be re-named.
     pub rename_table: HashMap<String, String>,
     /// Locations of text which should be replaced.
@@ -538,10 +538,10 @@ pub struct Pickle<'a> {
 
 impl<'a> Pickle<'a> {
     pub fn new(
-        prefix: Option<&'a str>,
-        suffix: Option<&'a str>,
-        exclude_rename: HashSet<&'a str>,
-        exclude: HashSet<&'a str>,
+        prefix: Option<&'a String>,
+        suffix: Option<&'a String>,
+        exclude_rename: HashSet<&'a String>,
+        exclude: HashSet<&'a String>,
         libs: LibraryBundle,
     ) -> Self {
         Self {
@@ -571,9 +571,7 @@ impl<'a> Pickle<'a> {
             self.module_graph.add_node(module_name.clone()),
         );
         self.module_file_map.insert(module_name.clone(), file);
-        if self.exclude_rename.contains(module_name.as_str())
-            || self.exclude.contains(module_name.as_str())
-        {
+        if self.exclude_rename.contains(&module_name) || self.exclude.contains(&module_name) {
             return;
         }
         let mut new_name = module_name.clone();
@@ -701,7 +699,7 @@ impl<'a> Pickle<'a> {
     // Check whether a given declaration should be striped from the sources.
     pub fn register_exclude(&mut self, syntax_tree: &SyntaxTree, id: RefNode, locate: Locate) {
         let (inst_name, loc) = get_identifier(syntax_tree, id);
-        if self.exclude.contains(inst_name.as_str()) {
+        if self.exclude.contains(&inst_name) {
             debug!("Exclude `{}`: {:?}", inst_name, loc);
             self.replace_table
                 .push((locate.offset, locate.len, "".to_string()));

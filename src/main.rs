@@ -8,7 +8,7 @@
 extern crate log;
 
 use anyhow::Result;
-use clap::{Arg, Command};
+use clap::{Arg, ArgAction, Command};
 use log::LevelFilter;
 use simple_logger::SimpleLogger;
 use std::collections::{HashMap, HashSet};
@@ -30,8 +30,8 @@ fn main() -> Result<()> {
                 .short('I')
                 .value_name("DIR")
                 .help("Add a search path for SystemVerilog includes")
-                .multiple_occurrences(true)
-                .takes_value(true),
+                .action(ArgAction::Append)
+                .num_args(1),
         )
         .arg(
             Arg::new("exclude_rename")
@@ -39,21 +39,22 @@ fn main() -> Result<()> {
                 .long("exclude-rename")
                 .value_name("MODULE|INTERFACE|PACKAGE")
                 .help("Add module, interface, package which should not be renamed")
-                .multiple_occurrences(true)
-                .takes_value(true),
+                .action(ArgAction::Append)
+                .num_args(1),
         )
         .arg(
             Arg::new("exclude")
                 .long("exclude")
                 .value_name("MODULE|INTERFACE|PACKAGE")
                 .help("Do not include module, interface, package in the pickled file list")
-                .multiple_occurrences(true)
-                .takes_value(true),
+                .action(ArgAction::Append)
+                .num_args(1),
         )
         .arg(
             Arg::new("v")
                 .short('v')
-                .multiple_occurrences(true)
+                .action(ArgAction::Count)
+                .num_args(0)
                 .help("Sets the level of verbosity"),
         )
         .arg(
@@ -62,15 +63,15 @@ fn main() -> Result<()> {
                 .long("prefix")
                 .value_name("PREFIX")
                 .help("Prepend a name to all global names")
-                .takes_value(true),
+                .num_args(1),
         )
         .arg(
             Arg::new("def")
                 .short('D')
                 .value_name("DEFINE")
                 .help("Define a preprocesor macro")
-                .multiple_occurrences(true)
-                .takes_value(true),
+                .action(ArgAction::Append)
+                .num_args(1),
         )
         .arg(
             Arg::new("suffix")
@@ -78,30 +79,35 @@ fn main() -> Result<()> {
                 .long("suffix")
                 .value_name("SUFFIX")
                 .help("Append a name to all global names")
-                .takes_value(true),
+                .num_args(1),
         )
         .arg(
             Arg::new("preproc")
                 .short('E')
-                .help("Write preprocessed input files to stdout"),
+                .help("Write preprocessed input files to stdout")
+                .num_args(0)
+                .action(ArgAction::SetTrue),
         )
         .arg(
             Arg::new("file_list")
                 .short('f')
                 .value_name("LIST")
                 .help("Gather files from a manifest")
-                .multiple_occurrences(true)
-                .takes_value(true),
+                .action(ArgAction::Append)
+                .num_args(1),
         )
         .arg(
             Arg::new("strip_comments")
                 .long("strip-comments")
-                .help("Strip comments from the output"),
+                .help("Strip comments from the output")
+                .num_args(0)
+                .action(ArgAction::SetTrue),
         )
         .arg(
             Arg::new("INPUT")
                 .help("The input files to compile")
-                .multiple_occurrences(true),
+                .action(ArgAction::Append)
+                .num_args(1..),
         )
         .arg(
             Arg::new("docdir")
@@ -109,22 +115,22 @@ fn main() -> Result<()> {
                 .long("doc")
                 .value_name("OUTDIR")
                 .help("Generate documentation in a directory")
-                .takes_value(true),
+                .num_args(1),
         )
         .arg(
             Arg::new("output")
                 .short('o')
                 .value_name("FILE")
                 .help("Write output to file")
-                .takes_value(true),
+                .num_args(1),
         )
         .arg(
             Arg::new("library_file")
                 .long("library-file")
                 .help("File to search for SystemVerilog modules")
                 .value_name("FILE")
-                .takes_value(true)
-                .multiple_occurrences(true),
+                .action(ArgAction::Append)
+                .num_args(1),
         )
         .arg(
             Arg::new("library_dir")
@@ -132,59 +138,69 @@ fn main() -> Result<()> {
                 .long("library-dir")
                 .help("Directory to search for SystemVerilog modules")
                 .value_name("DIR")
-                .takes_value(true)
-                .multiple_occurrences(true),
+                .action(ArgAction::Append)
+                .num_args(1),
         )
         .arg(
             Arg::new("manifest")
                 .long("manifest")
                 .value_name("FILE")
                 .help("Output a JSON-encoded source information manifest to FILE")
-                .takes_value(true),
+                .num_args(1),
         )
         .arg(
             Arg::new("top_module")
                 .long("top")
                 .value_name("TOP_MODULE")
                 .help("Top module, strips all unneeded files. May be incompatible with `--propagate_defines`.")
-                .takes_value(true),
+                .num_args(1),
         )
         .arg(
             Arg::new("graph_file")
                 .long("graph_file")
                 .value_name("FILE")
                 .help("Output a DOT graph of the parsed modules")
-                .takes_value(true),
+                .num_args(1),
         )
         .arg(
             Arg::new("ignore_unparseable")
                 .short('i')
-                .help("Ignore files that cannot be parsed"),
+                .help("Ignore files that cannot be parsed")
+                .num_args(0)
+                .action(ArgAction::SetTrue),
         )
         .arg(
             Arg::new("keep_defines")
                 .long("keep_defines")
-                .help("Prevents removal of `define statements."),
+                .help("Prevents removal of `define statements.")
+                .num_args(0)
+                .action(ArgAction::SetTrue),
         )
         .arg(
             Arg::new("propagate_defines")
                 .long("propagate_defines")
-                .help("Propagate defines from first files to the following files. Enables sequential."),
+                .help("Propagate defines from first files to the following files. Enables sequential.")
+                .num_args(0)
+                .action(ArgAction::SetTrue),
         )
         .arg(
             Arg::new("sequential")
                 .short('q')
                 .long("sequential")
                 .help("Enforce sequential processing of files. Slows down performance, but can avoid STACK_OVERFLOW.")
+                .num_args(0)
+                .action(ArgAction::SetTrue),
         )
         .arg(
             Arg::new("keep_timeunits")
                 .long("keep_timeunits")
                 .help("Keeps timeunits declared throughout the design, may result in bad pickles.")
+                .num_args(0)
+                .action(ArgAction::SetTrue),
         )
         .get_matches();
 
-    let logger_level = matches.occurrences_of("v");
+    let logger_level = matches.get_count("v");
 
     // Instantiate a new logger with the verbosity level the user requested.
     SimpleLogger::new()
@@ -201,7 +217,7 @@ fn main() -> Result<()> {
     let mut file_list = Vec::new();
 
     // Handle user defines.
-    let defines: HashMap<_, _> = match matches.values_of("def") {
+    let defines: HashMap<_, _> = match matches.get_many::<String>("def") {
         Some(args) => args
             .map(|x| {
                 let mut iter = x.split('=');
@@ -216,7 +232,7 @@ fn main() -> Result<()> {
 
     // Prepare a list of include paths.
     let include_dirs: Vec<_> = matches
-        .values_of("inc")
+        .get_many::<String>("inc")
         .into_iter()
         .flatten()
         .map(|x| x.to_string())
@@ -229,7 +245,11 @@ fn main() -> Result<()> {
 
     // we first accumulate all library files from the 'library_dir' and 'library_file' options into
     // a vector of paths, and then construct the library hashmap.
-    for dir in matches.values_of("library_dir").into_iter().flatten() {
+    for dir in matches
+        .get_many::<String>("library_dir")
+        .into_iter()
+        .flatten()
+    {
         for entry in std::fs::read_dir(dir).unwrap_or_else(|e| {
             eprintln!("error accessing library directory `{}`: {}", dir, e);
             process::exit(1)
@@ -239,7 +259,7 @@ fn main() -> Result<()> {
         }
     }
 
-    if let Some(library_names) = matches.values_of("library_file") {
+    if let Some(library_names) = matches.get_many::<String>("library_file") {
         let files = library_names.map(PathBuf::from).collect();
         library_paths.push(files);
     }
@@ -259,7 +279,11 @@ fn main() -> Result<()> {
         files: library_files,
     };
 
-    for path in matches.values_of("file_list").into_iter().flatten() {
+    for path in matches
+        .get_many::<String>("file_list")
+        .into_iter()
+        .flatten()
+    {
         let file = File::open(path).unwrap_or_else(|e| {
             eprintln!("error opening `{}`: {}", path, e);
             process::exit(1)
@@ -281,7 +305,7 @@ fn main() -> Result<()> {
         file_list.extend(u);
     }
 
-    if let Some(file_names) = matches.values_of("INPUT") {
+    if let Some(file_names) = matches.get_many::<String>("INPUT") {
         file_list.push(FileBundle {
             include_dirs: include_dirs.clone(),
             export_incdirs: HashMap::new(),
@@ -291,20 +315,25 @@ fn main() -> Result<()> {
     }
 
     let (mut exclude_rename, mut exclude) = (HashSet::new(), HashSet::new());
-    exclude_rename.extend(matches.values_of("exclude_rename").into_iter().flatten());
-    exclude.extend(matches.values_of("exclude").into_iter().flatten());
+    exclude_rename.extend(
+        matches
+            .get_many::<String>("exclude_rename")
+            .into_iter()
+            .flatten(),
+    );
+    exclude.extend(matches.get_many::<String>("exclude").into_iter().flatten());
 
-    let strip_comments = matches.is_present("strip_comments");
+    let strip_comments = matches.get_flag("strip_comments");
 
     let syntax_trees = build_syntax_tree(
         &file_list,
         strip_comments,
-        matches.is_present("ignore_unparseable"),
-        matches.is_present("propagate_defines"),
-        matches.is_present("sequential"),
+        matches.get_flag("ignore_unparseable"),
+        matches.get_flag("propagate_defines"),
+        matches.get_flag("sequential"),
     )?;
 
-    let out = match matches.value_of("output") {
+    let out = match matches.get_one::<String>("output") {
         Some(file) => {
             info!("Setting output to `{}`", file);
             let path = Path::new(file);
@@ -317,46 +346,46 @@ fn main() -> Result<()> {
     };
 
     // Just preprocess.
-    if matches.is_present("preproc") {
+    if matches.get_flag("preproc") {
         return just_preprocess(syntax_trees, out);
     }
 
     info!("Finished reading {} source files.", syntax_trees.len());
 
     // Emit documentation if requested.
-    if let Some(dir) = matches.value_of("docdir") {
+    if let Some(dir) = matches.get_one::<String>("docdir") {
         info!("Generating documentation in `{}`", dir);
         return build_doc(syntax_trees, dir);
     }
 
     let pickle = do_pickle(
-        matches.value_of("prefix"),
-        matches.value_of("suffix"),
+        matches.get_one::<String>("prefix"),
+        matches.get_one::<String>("suffix"),
         exclude_rename,
         exclude,
         library_bundle,
         syntax_trees,
         out,
-        matches.value_of("top_module"),
-        matches.contains_id("keep_defines"),
-        matches.is_present("propagate_defines"),
-        !matches.is_present("keep_timeunits"),
+        matches.get_one::<String>("top_module"),
+        matches.get_flag("keep_defines"),
+        matches.get_flag("propagate_defines"),
+        !matches.get_flag("keep_timeunits"),
     )?;
 
-    if let Some(graph_file) = matches.value_of("graph_file") {
+    if let Some(graph_file) = matches.get_one::<String>("graph_file") {
         write_dot_graph(&pickle, graph_file)?;
     }
 
     // if the user requested a manifest we need to compute the information and output it in json
     // form
-    if let Some(manifest_file) = matches.value_of("manifest") {
+    if let Some(manifest_file) = matches.get_one::<String>("manifest") {
         write_manifest(
             manifest_file,
             pickle,
             file_list,
             include_dirs,
             defines,
-            matches.value_of("top_module"),
+            matches.get_one::<String>("top_module"),
         )?;
     }
 
