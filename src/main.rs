@@ -337,24 +337,34 @@ fn main() -> Result<()> {
     let stdin_files = all_files
         .into_iter()
         .map(String::from)
-        .map(|file_str| match &file_str[..8] {
-            "+define+" => {
-                let def_str = file_str.replace("+define+", "");
-                match def_str.split_once('=') {
-                    Some((def, val)) => {
-                        stdin_defines.insert(def.to_string(), Some(val.to_string()));
+        .map(|file_str| {
+            let split_str = file_str.splitn(3, '+').collect::<Vec<_>>();
+            if split_str.len() > 1 {
+                match split_str[1] {
+                    "define" => {
+                        let def_str = split_str[2];
+                        match def_str.split_once('=') {
+                            Some((def, val)) => {
+                                stdin_defines.insert(def.to_string(), Some(val.to_string()));
+                            }
+                            None => {
+                                stdin_defines.insert(def_str.to_string(), None);
+                            }
+                        }
+                        None
                     }
-                    None => {
-                        stdin_defines.insert(def_str, None);
+                    "incdir" => {
+                        stdin_incdirs.push(split_str[2].to_string());
+                        None
+                    }
+                    _ => {
+                        eprintln!("Unimplemented argument, ignoring for now: {}", split_str[1]);
+                        None
                     }
                 }
-                None
+            } else {
+                Some(file_str)
             }
-            "+incdir+" => {
-                stdin_incdirs.push(file_str.replace("+incdir+", "").to_string());
-                None
-            }
-            _ => Some(file_str),
         })
         .flatten()
         .collect();
