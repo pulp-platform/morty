@@ -326,7 +326,7 @@ fn main() -> Result<()> {
 
         for line in lines {
             if let Ok(ref newline) = line {
-                match &newline[..9] {
+                match &newline[..8] {
                     "+define+" => { // TODO implement define parsing properly
                     }
                     "+incdir+" => {
