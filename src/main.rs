@@ -14,7 +14,7 @@ use simple_logger::SimpleLogger;
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io;
-use std::io::{BufReader, BufWriter, Write};
+use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::path::{Path, PathBuf};
 use std::process;
 
@@ -95,6 +95,14 @@ fn main() -> Result<()> {
                 .help("Gather files from a manifest")
                 .action(ArgAction::Append)
                 .num_args(1),
+        )
+        .arg(
+            Arg::new("flist")
+                .long("flist")
+                .value_name("FILE_LIST")
+                .help("Gather files from a file list")
+                .num_args(1)
+                .action(ArgAction::Append),
         )
         .arg(
             Arg::new("strip_comments")
@@ -303,6 +311,37 @@ fn main() -> Result<()> {
             fb.include_dirs.extend(include_dirs.clone());
         }
         file_list.extend(u);
+    }
+
+    for path in matches.get_many::<String>("flist").into_iter().flatten() {
+        let file = File::open(path).unwrap_or_else(|e| {
+            eprintln!("error opening `{}`: {}", path, e);
+            process::exit(1)
+        });
+        let lines = BufReader::new(file).lines();
+
+        let mut flist_files = Vec::new();
+        let mut flist_incdirs = Vec::new();
+        let flist_defines = HashMap::new();
+
+        for line in lines {
+            if let Ok(ref newline) = line {
+                match &newline[..9] {
+                    "+define+" => { // TODO implement define parsing properly
+                    }
+                    "+incdir+" => {
+                        flist_incdirs.push(newline.replace("+incdir+", "").to_string());
+                    }
+                    _ => flist_files.push(newline.to_string()),
+                }
+            }
+        }
+        file_list.push(FileBundle {
+            include_dirs: flist_incdirs,
+            export_incdirs: HashMap::new(),
+            defines: flist_defines,
+            files: flist_files,
+        })
     }
 
     if let Some(file_names) = matches.get_many::<String>("INPUT") {
