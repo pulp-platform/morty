@@ -332,31 +332,39 @@ fn main() -> Result<()> {
     }
 
     let mut stdin_incdirs = include_dirs.clone();
-    let mut _stdin_defines = HashMap::<String, Option<String>>::new();
+    let mut stdin_defines = HashMap::<String, Option<String>>::new();
 
     let stdin_files = all_files
         .into_iter()
         .map(String::from)
-        .map(|file_str| {
-            match &file_str[..8] {
-                "+define+" => {
-                    // TODO implement define parsing properly
-                    None
+        .map(|file_str| match &file_str[..8] {
+            "+define+" => {
+                let def_str = file_str.replace("+define+", "");
+                match def_str.split_once('=') {
+                    Some((def, val)) => {
+                        stdin_defines.insert(def.to_string(), Some(val.to_string()));
+                    }
+                    None => {
+                        stdin_defines.insert(def_str, None);
+                    }
                 }
-                "+incdir+" => {
-                    stdin_incdirs.push(file_str.replace("+incdir+", "").to_string());
-                    None
-                }
-                _ => Some(file_str),
+                None
             }
+            "+incdir+" => {
+                stdin_incdirs.push(file_str.replace("+incdir+", "").to_string());
+                None
+            }
+            _ => Some(file_str),
         })
         .flatten()
         .collect();
 
+    stdin_defines.extend(defines.clone());
+
     file_list.push(FileBundle {
-        include_dirs: stdin_incdirs,
+        include_dirs: stdin_incdirs.clone(),
         export_incdirs: HashMap::new(),
-        defines: defines.clone(),
+        defines: stdin_defines.clone(),
         files: stdin_files,
     });
 
@@ -429,8 +437,8 @@ fn main() -> Result<()> {
             manifest_file,
             pickle,
             file_list,
-            include_dirs,
-            defines,
+            stdin_incdirs,
+            stdin_defines,
             matches.get_one::<String>("top_module"),
         )?;
     }
