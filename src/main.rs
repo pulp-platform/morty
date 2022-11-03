@@ -313,6 +313,12 @@ fn main() -> Result<()> {
         file_list.extend(u);
     }
 
+    let mut all_files = Vec::<String>::new();
+
+    if let Some(file_names) = matches.get_many::<String>("INPUT") {
+        all_files.extend(file_names.map(|x| x.to_string()).collect::<Vec<_>>());
+    }
+
     for path in matches.get_many::<String>("flist").into_iter().flatten() {
         let file = File::open(path).unwrap_or_else(|e| {
             eprintln!("error opening `{}`: {}", path, e);
@@ -320,38 +326,39 @@ fn main() -> Result<()> {
         });
         let lines = BufReader::new(file).lines();
 
-        let mut flist_files = Vec::new();
-        let mut flist_incdirs = Vec::new();
-        let flist_defines = HashMap::new();
+        let proper_lines: Vec<String> = lines.filter_map(|x| x.ok()).collect();
 
-        for line in lines {
-            if let Ok(ref newline) = line {
-                match &newline[..8] {
-                    "+define+" => { // TODO implement define parsing properly
-                    }
-                    "+incdir+" => {
-                        flist_incdirs.push(newline.replace("+incdir+", "").to_string());
-                    }
-                    _ => flist_files.push(newline.to_string()),
+        all_files.extend(proper_lines);
+    }
+
+    let mut stdin_incdirs = include_dirs.clone();
+    let mut _stdin_defines = HashMap::<String, Option<String>>::new();
+
+    let stdin_files = all_files
+        .into_iter()
+        .map(String::from)
+        .map(|file_str| {
+            match &file_str[..8] {
+                "+define+" => {
+                    // TODO implement define parsing properly
+                    None
                 }
+                "+incdir+" => {
+                    stdin_incdirs.push(file_str.replace("+incdir+", "").to_string());
+                    None
+                }
+                _ => Some(file_str),
             }
-        }
-        file_list.push(FileBundle {
-            include_dirs: flist_incdirs,
-            export_incdirs: HashMap::new(),
-            defines: flist_defines,
-            files: flist_files,
         })
-    }
+        .flatten()
+        .collect();
 
-    if let Some(file_names) = matches.get_many::<String>("INPUT") {
-        file_list.push(FileBundle {
-            include_dirs: include_dirs.clone(),
-            export_incdirs: HashMap::new(),
-            defines: defines.clone(),
-            files: file_names.map(String::from).collect(),
-        });
-    }
+    file_list.push(FileBundle {
+        include_dirs: stdin_incdirs,
+        export_incdirs: HashMap::new(),
+        defines: defines.clone(),
+        files: stdin_files,
+    });
 
     let (mut exclude_rename, mut exclude) = (HashSet::new(), HashSet::new());
     exclude_rename.extend(
