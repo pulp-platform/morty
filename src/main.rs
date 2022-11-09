@@ -429,6 +429,10 @@ fn main() -> Result<()> {
         pickle.remove_macros()?;
     }
 
+    if !matches.get_flag("keep_timeunits") {
+        pickle.remove_timeunits()?;
+    }
+
     pickle.rename(
         matches.get_one::<String>("prefix"),
         matches.get_one::<String>("suffix"),
