@@ -770,6 +770,33 @@ impl Pickle {
         Ok(())
     }
 
+    /// Export AST to a pickled file
+    pub fn get_classic_pickle(&mut self, mut out: Box<dyn Write>, _exclude: HashSet<&String>) -> Result<()> {
+        write!(
+            out,
+            "// Compiled by morty-{} / {}\n\n",
+            env!("CARGO_PKG_VERSION"),
+            Local::now()
+        )
+        .unwrap();
+
+        for i in 0..self.all_files.len() {
+            // I don't think exclude is handled properly in the classic version...
+
+            for node in &self.all_files[i].ast {
+                match node {
+                    RefNode::SourceText(x) => {
+                        let source_locate = Locate::try_from(x).unwrap();
+                        writeln!(out, "{:}", self.get_replaced_string(i,source_locate)?)?;
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        Ok(())
+    }
+
     /// get .dot file for the module graph
     pub fn get_dot(&self, mut out: Box<dyn Write>) -> Result<()> {
         writeln!(

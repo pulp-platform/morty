@@ -443,7 +443,12 @@ fn main() -> Result<()> {
     //   - replace impossible parameters
     //   - replace types (and uniquify/elaborate)
 
-    pickle.get_pickle(out, exclude)?;
+    if matches.get_one::<String>("top_module").is_some() {
+        pickle.get_pickle(out, exclude)?;
+    } else {
+        pickle.get_classic_pickle(out, exclude)?;
+    }
+
 
     if let Some(graph_file) = matches.get_one::<String>("graph_file") {
         let graph_path = Path::new(graph_file);
