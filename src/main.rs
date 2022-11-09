@@ -7,6 +7,7 @@
 #[macro_use]
 extern crate log;
 
+use crate::pickle::Pickle;
 use anyhow::Result;
 use clap::{Arg, ArgAction, Command};
 use log::LevelFilter;
@@ -19,6 +20,8 @@ use std::path::{Path, PathBuf};
 use std::process;
 
 use morty::*;
+
+mod pickle;
 
 fn main() -> Result<()> {
     let matches = Command::new(env!("CARGO_PKG_NAME"))
@@ -388,13 +391,14 @@ fn main() -> Result<()> {
 
     let strip_comments = matches.get_flag("strip_comments");
 
-    let syntax_trees = build_syntax_tree(
+    let mut pickle = Pickle::new();
+    pickle.add_files(
         &file_list,
         strip_comments,
         matches.get_flag("ignore_unparseable"),
-        matches.get_flag("propagate_defines"),
-        matches.get_flag("sequential"),
     )?;
+
+    pickle.add_libs(library_bundle)?;
 
     let out = match matches.get_one::<String>("output") {
         Some(file) => {
@@ -410,46 +414,56 @@ fn main() -> Result<()> {
 
     // Just preprocess.
     if matches.get_flag("preproc") {
-        return just_preprocess(syntax_trees, out);
+        return pickle.just_preprocess(out);
     }
 
-    info!("Finished reading {} source files.", syntax_trees.len());
+    info!("Finished reading {} source files.", pickle.all_files.len());
 
     // Emit documentation if requested.
     if let Some(dir) = matches.get_one::<String>("docdir") {
         info!("Generating documentation in `{}`", dir);
-        return build_doc(syntax_trees, dir);
+        return pickle.build_doc(dir);
     }
 
-    let pickle = do_pickle(
+    pickle.build_graph()?;
+
+    if let Some(top) = matches.get_one::<String>("top_module") {
+        pickle.prune_graph(top)?;
+    }
+
+    if !matches.get_flag("keep_defines") {
+        pickle.remove_macros()?;
+    }
+
+    pickle.rename(
         matches.get_one::<String>("prefix"),
         matches.get_one::<String>("suffix"),
         exclude_rename,
-        exclude,
-        library_bundle,
-        syntax_trees,
-        out,
-        matches.get_one::<String>("top_module"),
-        matches.get_flag("keep_defines"),
-        matches.get_flag("propagate_defines"),
-        !matches.get_flag("keep_timeunits"),
     )?;
 
+    // TODO: add transforms
+    //   - replace interfaces
+    //   - replace impossible parameters
+    //   - replace types (and uniquify/elaborate)
+
+    pickle.get_pickle(out, exclude)?;
+
     if let Some(graph_file) = matches.get_one::<String>("graph_file") {
-        write_dot_graph(&pickle, graph_file)?;
+        let graph_path = Path::new(graph_file);
+        let graph_out =
+            Box::new(BufWriter::new(File::create(&graph_path).unwrap())) as Box<dyn Write>;
+
+        pickle.get_dot(graph_out)?;
     }
 
     // if the user requested a manifest we need to compute the information and output it in json
     // form
     if let Some(manifest_file) = matches.get_one::<String>("manifest") {
-        write_manifest(
-            manifest_file,
-            pickle,
-            file_list,
-            stdin_incdirs,
-            stdin_defines,
-            matches.get_one::<String>("top_module"),
-        )?;
+        let manifest_path = Path::new(manifest_file);
+        let manifest_out =
+            Box::new(BufWriter::new(File::create(&manifest_path).unwrap())) as Box<dyn Write>;
+
+        pickle.get_manifest(manifest_out, file_list, stdin_incdirs, stdin_defines)?;
     }
 
     Ok(())
