@@ -163,7 +163,7 @@ fn main() -> Result<()> {
             Arg::new("top_module")
                 .long("top")
                 .value_name("TOP_MODULE")
-                .help("Top module, strips all unneeded files. May be incompatible with `--propagate_defines`.")
+                .help("Top module, strips all unneeded files.")
                 .num_args(1),
         )
         .arg(
@@ -190,15 +190,7 @@ fn main() -> Result<()> {
         .arg(
             Arg::new("propagate_defines")
                 .long("propagate_defines")
-                .help("Propagate defines from first files to the following files. Enables sequential.")
-                .num_args(0)
-                .action(ArgAction::SetTrue),
-        )
-        .arg(
-            Arg::new("sequential")
-                .short('q')
-                .long("sequential")
-                .help("Enforce sequential processing of files. Slows down performance, but can avoid STACK_OVERFLOW.")
+                .help("Propagate defines from first files to the following files.")
                 .num_args(0)
                 .action(ArgAction::SetTrue),
         )
@@ -396,6 +388,7 @@ fn main() -> Result<()> {
         &file_list,
         strip_comments,
         matches.get_flag("ignore_unparseable"),
+        matches.get_flag("propagate_defines"),
     )?;
 
     pickle.add_libs(library_bundle)?;

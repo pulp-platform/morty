@@ -16,7 +16,7 @@ use std::convert::TryFrom;
 use std::io::Write;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
-use sv_parser::{parse_sv_pp, preprocess, unwrap_node, Define, Locate, RefNode};
+use sv_parser::{parse_sv_pp, preprocess, unwrap_node, Defines, Locate, RefNode};
 
 /// Struct used for transformations
 #[derive(Debug)]
@@ -55,9 +55,9 @@ impl Pickle {
         &mut self,
         filename: &str,
         bundle_include_dirs: &[&Path],
-        bundle_defines: &HashMap<String, Option<Define>>,
+        bundle_defines: &Defines,
         strip_comments: bool,
-    ) -> Result<()> {
+    ) -> Result<Defines> {
         info!("Adding {:?}", filename);
 
         // Preprocess the verilog files.
@@ -82,10 +82,10 @@ impl Pickle {
             path: String::from(filename),
             source: buffer,
             ast: syntax_tree.0,
-            defines: syntax_tree.1,
+            defines: syntax_tree.1.clone(),
         });
 
-        Ok(())
+        Ok(syntax_tree.1)
     }
 
     /// Parse and add multiple files
@@ -94,18 +94,30 @@ impl Pickle {
         file_list: &Vec<FileBundle>,
         strip_comments: bool,
         ignore_unparseable: bool,
+        propagate_defines: bool,
     ) -> Result<()> {
+        let mut internal_defines: Defines = HashMap::new();
+
         for bundle in file_list {
             let bundle_include_dirs: Vec<_> = bundle.include_dirs.iter().map(Path::new).collect();
-            let bundle_defines = defines_to_sv_parser(&bundle.defines);
+
+            if propagate_defines {
+                internal_defines.extend(defines_to_sv_parser(&bundle.defines));
+            } else {
+                internal_defines = defines_to_sv_parser(&bundle.defines);
+            }
 
             let v = bundle.files.iter().map(|filename| -> Result<_> {
-                self.parse_file(
+                let pf_defines = self.parse_file(
                     filename,
                     &bundle_include_dirs,
-                    &bundle_defines,
+                    &internal_defines,
                     strip_comments,
-                )
+                )?;
+                if propagate_defines {
+                    internal_defines.extend(pf_defines);
+                }
+                Ok(())
             });
 
             let _ = if ignore_unparseable {
