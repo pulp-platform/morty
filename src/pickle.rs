@@ -98,34 +98,22 @@ impl Pickle {
         for bundle in file_list {
             let bundle_include_dirs: Vec<_> = bundle.include_dirs.iter().map(Path::new).collect();
             let bundle_defines = defines_to_sv_parser(&bundle.defines);
-            if ignore_unparseable {
-                let _ = bundle
-                    .files
-                    .iter()
-                    .map(|filename| -> Result<_> {
-                        self.parse_file(
-                            filename,
-                            &bundle_include_dirs,
-                            &bundle_defines,
-                            strip_comments,
-                        )
-                    })
-                    .filter_map(|r| r.map_err(|e| warn!("Continuing with {:?}", e)).ok())
-                    .collect::<Vec<_>>();
+
+            let v = bundle.files.iter().map(|filename| -> Result<_> {
+                self.parse_file(
+                    filename,
+                    &bundle_include_dirs,
+                    &bundle_defines,
+                    strip_comments,
+                )
+            });
+
+            let _ = if ignore_unparseable {
+                v.filter_map(|r| r.map_err(|e| warn!("Continuing with {:?}", e)).ok())
+                    .for_each(drop);
             } else {
-                let _ = bundle
-                    .files
-                    .iter()
-                    .map(|filename| -> Result<_> {
-                        self.parse_file(
-                            filename,
-                            &bundle_include_dirs,
-                            &bundle_defines,
-                            strip_comments,
-                        )
-                    })
-                    .collect::<Result<Vec<_>>>()?;
-            }
+                v.collect::<Result<Vec<_>>>()?;
+            };
         }
 
         Ok(())
