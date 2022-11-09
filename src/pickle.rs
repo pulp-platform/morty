@@ -543,6 +543,21 @@ impl Pickle {
         Ok(())
     }
 
+    /// Add replacements to remove timeunit and timeprecision
+    pub fn remove_timeunits(&mut self) -> Result<()> {
+        for i in 0..self.all_files.len() {
+            let pf = &self.all_files[i];
+            for node in &pf.ast {
+                if let RefNode::TimeunitsDeclaration(x) = node {
+                    let loc = Locate::try_from(x).unwrap();
+                    self.replace_table.push((i, loc, "".to_string()));
+                }
+            }
+        }
+
+        Ok(())
+    }
+
     fn get_node_from_locate(&self, file_id: usize, location: Locate) -> Result<RefNode> {
         let node = self.all_files[file_id].ast.into_iter().find(|x|
             match x {
