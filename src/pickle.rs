@@ -315,10 +315,22 @@ impl Pickle {
                 .into_iter()
                 .filter_map(|node| {
                     if let RefNode::DescriptionPackageItem(x) = node {
-                        let (name, _loc) =
-                            get_identifier(&pf.ast, unwrap_node!(x, SimpleIdentifier).unwrap());
-                        eprintln!("Global package import in {}", &pf.path);
-                        Some((name, Locate::try_from(x).unwrap()))
+                        if let Some(package_import) = unwrap_node!(x, PackageImportDeclaration) {
+                            let (name, _loc) = get_identifier(
+                                &pf.ast,
+                                unwrap_node!(package_import, SimpleIdentifier).unwrap(),
+                            );
+                            warn!(
+                                "Global package import in {}:\n\t{}",
+                                &pf.path,
+                                &pf.source[Locate::try_from(x).unwrap().offset
+                                    ..(Locate::try_from(x).unwrap().offset
+                                        + Locate::try_from(x).unwrap().len)]
+                            );
+                            Some((name, Locate::try_from(x).unwrap()))
+                        } else {
+                            None
+                        }
                     } else {
                         None
                     }
@@ -771,7 +783,11 @@ impl Pickle {
     }
 
     /// Export AST to a pickled file
-    pub fn get_classic_pickle(&mut self, mut out: Box<dyn Write>, _exclude: HashSet<&String>) -> Result<()> {
+    pub fn get_classic_pickle(
+        &mut self,
+        mut out: Box<dyn Write>,
+        _exclude: HashSet<&String>,
+    ) -> Result<()> {
         write!(
             out,
             "// Compiled by morty-{} / {}\n\n",
@@ -787,7 +803,7 @@ impl Pickle {
                 match node {
                     RefNode::SourceText(x) => {
                         let source_locate = Locate::try_from(x).unwrap();
-                        writeln!(out, "{:}", self.get_replaced_string(i,source_locate)?)?;
+                        writeln!(out, "{:}", self.get_replaced_string(i, source_locate)?)?;
                     }
                     _ => {}
                 }

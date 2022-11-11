@@ -449,7 +449,6 @@ fn main() -> Result<()> {
         pickle.get_classic_pickle(out, exclude)?;
     }
 
-
     if let Some(graph_file) = matches.get_one::<String>("graph_file") {
         let graph_path = Path::new(graph_file);
         let graph_out =
