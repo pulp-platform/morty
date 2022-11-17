@@ -201,6 +201,13 @@ fn main() -> Result<()> {
                 .num_args(0)
                 .action(ArgAction::SetTrue),
         )
+        .arg(
+            Arg::new("infer_dot_star")
+                .long("infer_dot_star")
+                .help("Infer signals from module declaration and replace .* expressions")
+                .num_args(0)
+                .action(ArgAction::SetTrue),
+        )
         .get_matches();
 
     let logger_level = matches.get_count("v");
@@ -430,6 +437,10 @@ fn main() -> Result<()> {
 
     if !matches.get_flag("keep_timeunits") {
         pickle.remove_timeunits()?;
+    }
+
+    if matches.get_flag("infer_dot_star") {
+        pickle.infer_dot_star()?;
     }
 
     pickle.rename(

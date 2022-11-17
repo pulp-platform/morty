@@ -16,7 +16,7 @@ use std::convert::TryFrom;
 use std::io::Write;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
-use sv_parser::{parse_sv_pp, preprocess, unwrap_node, Defines, Locate, RefNode};
+use sv_parser::{parse_sv_pp, preprocess, unwrap_locate, unwrap_node, Defines, Locate, RefNode};
 
 /// Struct used for transformations
 #[derive(Debug)]
@@ -569,6 +569,73 @@ impl Pickle {
                 if let RefNode::TimeunitsDeclaration(x) = node {
                     let loc = Locate::try_from(x).unwrap();
                     self.replace_table.push((i, loc, "".to_string()));
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Add replacements to remove timeunit and timeprecision
+    pub fn infer_dot_star(&mut self) -> Result<()> {
+        for i in 0..self.all_files.len() {
+            let pf = &self.all_files[i];
+
+            for node in &pf.ast {
+                if let RefNode::ModuleInstantiation(x) = node {
+                    let asterisk = unwrap_node!(x, NamedPortConnectionAsterisk);
+                    if asterisk.is_some() {
+                        let id = unwrap_node!(x, ModuleIdentifier).unwrap();
+                        let (inst_name, _) = get_identifier(&pf.ast, id).clone();
+                        let list_of_ports_node =
+                            unwrap_node!(x, ListOfPortConnectionsNamed).unwrap();
+                        let mut already_added_ports = Vec::new();
+                        for port in list_of_ports_node {
+                            if let RefNode::PortIdentifier(p) = port {
+                                // we need this check to be sure that it is a port and not an
+                                // expression
+                                let port_node = unwrap_node!(p, SimpleIdentifier).unwrap();
+                                let (port_name, _) = get_identifier(&pf.ast, port_node.clone());
+                                already_added_ports.push(port_name.clone());
+                            }
+                        }
+                        let module_declaration = self.get_node_from_locate(
+                            self.declarations[&inst_name].1,
+                            self.declarations[&inst_name].2,
+                        )?;
+                        let mut all_port_of_module = Vec::new();
+                        for n in module_declaration {
+                            match n {
+                                RefNode::PortDeclaration(p) => {
+                                    let id = unwrap_node!(p, PortIdentifier).unwrap();
+                                    let (port_name, _) = get_identifier(
+                                        &self.all_files[self.declarations[&inst_name].1].ast,
+                                        id,
+                                    );
+                                    println!("{}", port_name);
+                                    all_port_of_module.push(port_name);
+                                }
+                                RefNode::AnsiPortDeclaration(p) => {
+                                    let id = unwrap_node!(p, PortIdentifier).unwrap();
+                                    let (port_name, _) = get_identifier(
+                                        &self.all_files[self.declarations[&inst_name].1].ast,
+                                        id,
+                                    );
+                                    all_port_of_module.push(port_name);
+                                }
+                                _ => {}
+                            }
+                        }
+                        let mut ports_string = String::new();
+                        for port in all_port_of_module {
+                            if !already_added_ports.contains(&port) {
+                                ports_string.push_str(&format!(".{}({}), ", port, port));
+                            }
+                        }
+                        ports_string = ports_string.trim_end_matches(", ").to_string();
+                        let loc = unwrap_locate!(asterisk.unwrap()).unwrap();
+                        self.replace_table.push((i, *loc, ports_string));
+                    }
                 }
             }
         }
