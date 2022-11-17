@@ -92,11 +92,16 @@ fn test_infer_dot_star() -> Result<(), Box<dyn std::error::Error>> {
     let expected_output = fs::read_to_string("test/infer_dot_star/expected/expected.sv")?;
     let mut cmd = Command::cargo_bin("morty")?;
     cmd.arg("--infer_dot_star")
-        .arg("test/infer_dot_star/top.sv")
-        .arg("test/infer_dot_star/submodule.sv");
-    cmd.assert()
-        .success()
-        .stdout(predicate::str::contains(expected_output));
-
+        .arg(Path::new("test/infer_dot_star/top.sv").as_os_str())
+        .arg(Path::new("test/infer_dot_star/submodule.sv").as_os_str());
+    let binding = cmd.assert().success();
+    // we have to do it this complex such that windows tests are passing
+    // windows has a different output format and injects \r into the output
+    let output = &binding.get_output().stdout;
+    let output_str = String::from_utf8(output.clone()).unwrap();
+    let expected_output_stripped = expected_output.replace(&['\r'][..], "");
+    let output_str_stripped = output_str.replace(&['\r'][..], "");
+    let compare_fn = predicate::str::contains(expected_output_stripped);
+    assert_eq!(compare_fn.eval(&output_str_stripped), true);
     Ok(())
 }
