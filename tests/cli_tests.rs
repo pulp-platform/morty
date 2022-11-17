@@ -86,3 +86,17 @@ mod tests {
         Ok(())
     }
 }
+
+#[test]
+fn test_infer_dot_star() -> Result<(), Box<dyn std::error::Error>> {
+    let expected_output = fs::read_to_string("test/infer_dot_star/expected/expected.sv")?;
+    let mut cmd = Command::cargo_bin("morty")?;
+    cmd.arg("--infer_dot_star")
+        .arg("test/infer_dot_star/top.sv")
+        .arg("test/infer_dot_star/submodule.sv");
+    cmd.assert()
+        .success()
+        .stdout(predicate::str::contains(expected_output));
+
+    Ok(())
+}
