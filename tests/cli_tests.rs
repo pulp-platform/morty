@@ -39,4 +39,50 @@ mod tests {
 
         Ok(())
     }
+
+    #[test]
+    fn test_package_2() -> Result<()> {
+        let mut cmd = Command::cargo_bin("morty")?;
+
+        cmd.arg("test/package.sv").arg("test/package_import_2.sv");
+
+        cmd.assert().success();
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_package() -> Result<()> {
+        let mut cmd = Command::cargo_bin("morty")?;
+        cmd.arg("test/package.sv")
+            .arg("test/package_import.sv")
+            .arg("-I")
+            .arg("test");
+
+        cmd.assert().success();
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_import() -> Result<()> {
+        let mut cmd = Command::cargo_bin("morty")?;
+        cmd.arg("test/import.sv");
+
+        cmd.assert().success();
+        Ok(())
+    }
+
+    #[test]
+    fn test_preprocess() -> Result<()> {
+        let mut cmd = Command::cargo_bin("morty")?;
+        cmd.arg("test/preprocess.sv")
+            .arg("-I")
+            .arg("test")
+            .arg("-E");
+
+        cmd.assert().success();
+
+        Ok(())
+    }
 }
