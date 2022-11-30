@@ -1,28 +1,42 @@
+// Copyright 2022 PULP-platform
+
+// SPDX-License-Identifier: Apache-2.0
+
+use anyhow::Result;
 use assert_cmd::prelude::*; // Add methods on commands
-use assert_fs::prelude::*;
 use predicates::prelude::*; // Used for writing assertions
+use std::path::Path;
 use std::process::Command; // Run programs
+                           // use std::fs::File;
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
     #[test]
-    fn it_works() {
-        let result = 2 + 2;
-        assert_eq!(result, 4);
+    fn simple_help_print_check() -> Result<()> {
+        let mut cmd = Command::cargo_bin("morty")?;
+        cmd.arg("-h");
+        cmd.assert()
+            .success()
+            .stdout(predicate::str::contains("Print version information\n"));
+
+        Ok(())
     }
-}
 
-// this is an example test
-#[test]
-fn simple_help_print_check() -> Result<(), Box<dyn std::error::Error>> {
-    let file = assert_fs::NamedTempFile::new("sample.txt")?;
-    file.write_str("A test\nActual content\nMore content\nAnother test")?;
+    #[test]
+    fn test_doc_generation() -> Result<()> {
+        let mut cmd = Command::cargo_bin("morty")?;
+        cmd.arg("test/doc.sv").arg("--doc=test/doc");
 
-    let mut cmd = Command::cargo_bin("morty")?;
-    cmd.arg("-h");
-    cmd.assert()
-        .success()
-        .stdout(predicate::str::contains("Print version information\n"));
+        cmd.assert().success();
 
-    Ok(())
+        assert!(Path::new("test/doc/index.html").exists());
+
+        assert!(std::fs::read_to_string("test/doc/index.html")
+            .unwrap()
+            .contains("First-in First-out Queue"));
+
+        Ok(())
+    }
 }
