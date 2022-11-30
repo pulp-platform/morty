@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ### Added
 - Add switch to disable parallel file parsing (can help with STACKOVERFLOW)
 - Add switch to propagate defines from parsed files to subsequent files
+- Add support for flist files, capable of parsing a list of files with `+incdir+` and `+define+` arguments.
 
 ### Fixed
 - correct global package parsing
