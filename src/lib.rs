@@ -274,12 +274,9 @@ pub fn do_pickle<'a>(
 
         if !keep_defines {
             for node in &pf.ast {
-                match node {
-                    RefNode::TextMacroDefinition(x) => {
-                        let loc = Locate::try_from(x).unwrap();
-                        new_replace_table.push((loc.offset, loc.len, "".to_string()));
-                    }
-                    _ => (),
+                if let RefNode::TextMacroDefinition(x) = node {
+                    let loc = Locate::try_from(x).unwrap();
+                    new_replace_table.push((loc.offset, loc.len, "".to_string()));
                 }
             }
         }
@@ -484,7 +481,7 @@ pub fn write_manifest(
     .unwrap();
 
     let path = Path::new(manifest_file);
-    let mut out = Box::new(BufWriter::new(File::create(&path).unwrap())) as Box<dyn Write>;
+    let mut out = Box::new(BufWriter::new(File::create(path).unwrap())) as Box<dyn Write>;
     writeln!(out, "{}", json).unwrap();
 
     Ok(())
@@ -493,7 +490,7 @@ pub fn write_manifest(
 /// Write module graph to file
 pub fn write_dot_graph(pickle: &Pickle, graph_file: &str) -> Result<()> {
     let path = Path::new(graph_file);
-    let mut out = Box::new(BufWriter::new(File::create(&path).unwrap())) as Box<dyn Write>;
+    let mut out = Box::new(BufWriter::new(File::create(path).unwrap())) as Box<dyn Write>;
     writeln!(
         out,
         "{:?}",

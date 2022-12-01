@@ -331,13 +331,13 @@ fn main() -> Result<()> {
         all_files.extend(proper_lines);
     }
 
-    let mut stdin_incdirs = include_dirs.clone();
+    let mut stdin_incdirs = include_dirs;
     let mut stdin_defines = HashMap::<String, Option<String>>::new();
 
     let stdin_files = all_files
         .into_iter()
         .map(String::from)
-        .map(|file_str| {
+        .filter_map(|file_str| {
             let split_str = file_str.splitn(3, '+').collect::<Vec<_>>();
             if split_str.len() > 1 {
                 match split_str[1] {
@@ -366,10 +366,9 @@ fn main() -> Result<()> {
                 Some(file_str)
             }
         })
-        .flatten()
         .collect();
 
-    stdin_defines.extend(defines.clone());
+    stdin_defines.extend(defines);
 
     file_list.push(FileBundle {
         include_dirs: stdin_incdirs.clone(),
@@ -401,7 +400,7 @@ fn main() -> Result<()> {
         Some(file) => {
             info!("Setting output to `{}`", file);
             let path = Path::new(file);
-            Box::new(BufWriter::new(File::create(&path).unwrap_or_else(|e| {
+            Box::new(BufWriter::new(File::create(path).unwrap_or_else(|e| {
                 eprintln!("could not create `{}`: {}", file, e);
                 process::exit(1);
             }))) as Box<dyn Write>
