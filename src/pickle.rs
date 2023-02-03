@@ -37,6 +37,12 @@ pub struct Pickle {
     pub replace_table: Vec<(/* file id */ usize, Locate, String)>,
 }
 
+impl Default for Pickle {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Pickle {
     pub fn new() -> Self {
         Self {
@@ -120,7 +126,7 @@ impl Pickle {
                 Ok(())
             });
 
-            let _ = if ignore_unparseable {
+            if ignore_unparseable {
                 v.filter_map(|r| r.map_err(|e| warn!("Continuing with {:?}", e)).ok())
                     .for_each(drop);
             } else {
@@ -598,7 +604,7 @@ impl Pickle {
     }
 
     /// Add replacements to rename modules with prefix and suffix
-    pub fn rename<'a>(
+    pub fn rename(
         &mut self,
         prefix: Option<&String>,
         suffix: Option<&String>,
@@ -711,7 +717,7 @@ impl Pickle {
                 &repl
             );
             out_string.push_str(&needed_string[pos..*offset]);
-            out_string.push_str(&repl);
+            out_string.push_str(repl);
             pos = offset + len;
         }
         out_string.push_str(&needed_string[pos..]);
@@ -738,7 +744,7 @@ impl Pickle {
         let mut keeper_nodes = Vec::new();
         let mut keeper_names = Vec::new();
         for (name, node) in &internal_nodes {
-            if self.declarations.contains_key(&*name) {
+            if self.declarations.contains_key(name) {
                 keeper_nodes.push(*node);
                 keeper_names.push(name);
             }
@@ -759,7 +765,7 @@ impl Pickle {
             for (name, node) in &internal_nodes {
                 if internal_graph.neighbors_directed(*node, Outgoing).count() == 0 {
                     // Remove node from graph
-                    if !internal_graph.remove_node(*node).is_some() {
+                    if internal_graph.remove_node(*node).is_none() {
                         return Err(anyhow!("Unable to remove node {} from graph", name));
                     }
 
@@ -800,12 +806,9 @@ impl Pickle {
             // I don't think exclude is handled properly in the classic version...
 
             for node in &self.all_files[i].ast {
-                match node {
-                    RefNode::SourceText(x) => {
-                        let source_locate = Locate::try_from(x).unwrap();
-                        writeln!(out, "{:}", self.get_replaced_string(i, source_locate)?)?;
-                    }
-                    _ => {}
+                if let RefNode::SourceText(x) = node {
+                    let source_locate = Locate::try_from(x).unwrap();
+                    writeln!(out, "{:}", self.get_replaced_string(i, source_locate)?)?;
                 }
             }
         }
@@ -859,7 +862,7 @@ impl Pickle {
         let mut base_files = Vec::new();
         let mut bundles = Vec::<FileBundle>::new();
         let mut needed_files = HashSet::new();
-        for (_name, module) in &self.declarations {
+        for module in self.declarations.values() {
             needed_files.insert(self.all_files[module.1].path.clone());
         }
         for mut bundle in file_list {
@@ -912,11 +915,8 @@ impl Pickle {
             eprintln!("{}:", pf.path);
 
             for node in &pf.ast {
-                match node {
-                    RefNode::SourceText(x) => {
-                        writeln!(out, "{:}", pf.ast.get_str(x).unwrap())?;
-                    }
-                    _ => {}
+                if let RefNode::SourceText(x) = node {
+                    writeln!(out, "{:}", pf.ast.get_str(x).unwrap())?;
                 }
             }
         }

@@ -452,7 +452,7 @@ fn main() -> Result<()> {
     if let Some(graph_file) = matches.get_one::<String>("graph_file") {
         let graph_path = Path::new(graph_file);
         let graph_out =
-            Box::new(BufWriter::new(File::create(&graph_path).unwrap())) as Box<dyn Write>;
+            Box::new(BufWriter::new(File::create(graph_path).unwrap())) as Box<dyn Write>;
 
         pickle.get_dot(graph_out)?;
     }
@@ -462,7 +462,7 @@ fn main() -> Result<()> {
     if let Some(manifest_file) = matches.get_one::<String>("manifest") {
         let manifest_path = Path::new(manifest_file);
         let manifest_out =
-            Box::new(BufWriter::new(File::create(&manifest_path).unwrap())) as Box<dyn Write>;
+            Box::new(BufWriter::new(File::create(manifest_path).unwrap())) as Box<dyn Write>;
 
         pickle.get_manifest(manifest_out, file_list, stdin_incdirs, stdin_defines)?;
     }

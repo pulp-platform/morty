@@ -17,9 +17,9 @@ mod tests {
     fn simple_help_print_check() -> Result<()> {
         let mut cmd = Command::cargo_bin("morty")?;
         cmd.arg("-h");
-        cmd.assert()
-            .success()
-            .stdout(predicate::str::contains("Print version information\n"));
+        cmd.assert().success().stdout(predicate::str::contains(
+            "A SystemVerilog source file pickler.\n",
+        ));
 
         Ok(())
     }
