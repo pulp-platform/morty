@@ -179,6 +179,7 @@ impl Printer {
         });
     }
 
+    #[allow(clippy::too_many_arguments)]
     #[cfg_attr(tarpaulin, skip)]
     fn print_pretty(
         &mut self,
