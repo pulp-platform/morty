@@ -97,12 +97,11 @@ mod tests {
         let clone_output = Command::new("sh")
           .current_dir(&tempdir)
           .arg("-c")
-          .arg("git clone https://github.com/pulp-platform/cva6.git --branch bender-changes && cd cva6 && git submodule update --init --recursive && echo hubus")
+          .arg("git clone https://github.com/pulp-platform/cva6.git --branch bender-changes && cd cva6 && git submodule update --init --recursive")
           .output()
           .expect("failed to execute process");
         io::stdout().write_all(&clone_output.stdout).unwrap();
         io::stderr().write_all(&clone_output.stderr).unwrap();
-        println!("status: {}", clone_output.status);
         assert!(clone_output.status.success());
         let bender_output = Command::new("sh")
             .current_dir(&tempdir)
@@ -112,7 +111,6 @@ mod tests {
             .expect("failed to execute process");
         io::stdout().write_all(&bender_output.stdout).unwrap();
         io::stderr().write_all(&bender_output.stderr).unwrap();
-        println!("status2: {}", bender_output.status);
         assert!(bender_output.status.success());
 
         let mut cmd = Command::cargo_bin("morty")?;
@@ -123,8 +121,11 @@ mod tests {
                     .as_os_str(),
             )
             .arg("-o")
-            //.arg(Path::new(&tempdir.path()).join("output.sv").as_os_str())
-            .arg(Path::new("output.sv").as_os_str())
+            .arg(
+                Path::new(&tempdir.path())
+                    .join("cva6/output.sv")
+                    .as_os_str(),
+            )
             .arg("--top")
             .arg("cva6");
         let binding = cmd.assert().success();
@@ -132,6 +133,15 @@ mod tests {
         let output_str = String::from_utf8(output.clone()).unwrap();
         println!("output: {}", output_str);
 
+        let slang_output = Command::new("sh")
+            .current_dir(&tempdir)
+            .arg("-c")
+            .arg("cd cva6 && echo $PATH && slang output.sv --top cva6 -Wrange-width-oob")
+            .output()
+            .expect("failed to execute process");
+        io::stdout().write_all(&slang_output.stdout).unwrap();
+        io::stderr().write_all(&slang_output.stderr).unwrap();
+        assert!(slang_output.status.success());
         Ok(())
     }
 }
