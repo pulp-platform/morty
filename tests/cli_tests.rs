@@ -9,6 +9,8 @@ use std::fs;
 use std::path::Path;
 use std::process::Command; // Run programs
                            // use std::fs::File;
+use std::io::{self, Write};
+use tempfile;
 
 #[cfg(test)]
 mod tests {
@@ -103,6 +105,53 @@ mod tests {
         let output_str_stripped = output_str.replace(&['\r'][..], "");
         let compare_fn = predicate::str::contains(expected_output_stripped);
         assert_eq!(compare_fn.eval(&output_str_stripped), true);
+        Ok(())
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    #[test]
+    fn test_cva6() -> Result<(), Box<dyn std::error::Error>> {
+        // debug with -- --nocapture
+        let tempdir = tempfile::tempdir()?;
+        println!("tempdir: {:?}", tempdir.path());
+        let clone_output = Command::new("sh")
+          .current_dir(&tempdir)
+          .arg("-c")
+          .arg("git clone https://github.com/pulp-platform/cva6.git --branch bender-changes && cd cva6 && git submodule update --init --recursive && echo hubus")
+          .output()
+          .expect("failed to execute process");
+        io::stdout().write_all(&clone_output.stdout).unwrap();
+        io::stderr().write_all(&clone_output.stderr).unwrap();
+        println!("status: {}", clone_output.status);
+        assert!(clone_output.status.success());
+        let bender_output = Command::new("sh")
+            .current_dir(&tempdir)
+            .arg("-c")
+            .arg("cd cva6 && bender sources -f -t cv64a6_imafdc_sv39 > sources.json")
+            .output()
+            .expect("failed to execute process");
+        io::stdout().write_all(&bender_output.stdout).unwrap();
+        io::stderr().write_all(&bender_output.stderr).unwrap();
+        println!("status2: {}", bender_output.status);
+        assert!(bender_output.status.success());
+
+        let mut cmd = Command::cargo_bin("morty")?;
+        cmd.arg("-f")
+            .arg(
+                Path::new(&tempdir.path())
+                    .join("cva6/sources.json")
+                    .as_os_str(),
+            )
+            .arg("-o")
+            //.arg(Path::new(&tempdir.path()).join("output.sv").as_os_str())
+            .arg(Path::new("output.sv").as_os_str())
+            .arg("--top")
+            .arg("cva6");
+        let binding = cmd.assert().success();
+        let output = &binding.get_output().stdout;
+        let output_str = String::from_utf8(output.clone()).unwrap();
+        println!("output: {}", output_str);
+
         Ok(())
     }
 }
