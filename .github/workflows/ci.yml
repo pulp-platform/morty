@@ -61,7 +61,7 @@ jobs:
             cd slang && git checkout v2.0 && \
             cmake -B build && cmake --build build -j$(nproc) && \
             cmake --install build --strip
-      if: matrix.os == 'linux-latest' || matrix.os == 'macos-latest'
+      if: matrix.os == 'ubuntu-latest' || matrix.os == 'macos-latest'
     - name: Build
       run: cargo build --verbose
     - name: Run tests
