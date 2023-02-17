@@ -56,11 +56,12 @@ jobs:
     - name: Install bender
       run: cargo install bender
     - name: Install slang
-      run:  mkdir -p $HOME/tools/slang && chmod 777 $HOME/tools/slang && \
-            cd $HOME/tools/slang && git clone https://github.com/MikePopoloski/slang.git && \
-            cd slang && git checkout v2.0 && \
-            cmake -B build && cmake --build build -j$(nproc) && \
-            cmake --install build --strip
+      run: |
+        sudo mkdir -p /tools && sudo chmod 777 /tools
+        cd /tools && git clone https://github.com/MikePopoloski/slang.git && cd slang && git checkout v2.0
+        echo $PWD
+        cmake -B build && cmake --build build -j$(nproc)
+        cmake --install build --strip
       if: matrix.os == 'ubuntu-latest' || matrix.os == 'macos-latest'
     - name: Build
       run: cargo build --verbose
