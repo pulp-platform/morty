@@ -55,6 +55,7 @@ jobs:
       if: matrix.os == 'macos-latest'
     - name: Install bender
       run: cargo install bender
+      if: matrix.os == 'ubuntu-latest'
     - name: Install slang
       run: |
         sudo mkdir -p /tools && sudo chmod 777 /tools
@@ -62,7 +63,7 @@ jobs:
         echo $PWD
         cmake -B build && cmake --build build -j$(nproc)
         cmake --install build --strip
-      if: matrix.os == 'ubuntu-latest' || matrix.os == 'macos-latest'
+      if: matrix.os == 'ubuntu-latest'
     - name: Build
       run: cargo build --verbose
     - name: Run tests

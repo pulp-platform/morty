@@ -88,7 +88,7 @@ mod tests {
         Ok(())
     }
 
-    #[cfg(not(target_os = "windows"))]
+    #[cfg(target_os = "linux")]
     #[test]
     fn test_cva6() -> Result<(), Box<dyn std::error::Error>> {
         // debug with -- --nocapture
