@@ -61,8 +61,8 @@ jobs:
         sudo mkdir -p /tools && sudo chmod 777 /tools
         cd /tools && git clone https://github.com/MikePopoloski/slang.git && cd slang && git checkout v2.0
         echo $PWD
-        cmake -B build && cmake --build build -j$(nproc)
-        cmake --install build --strip
+        cmake -B build && make -C build && cmake --install build --prefix /tools/install
+        echo "PATH=$PATH:/tools/install/bin" >> ${GITHUB_ENV}
       if: matrix.os == 'ubuntu-latest'
     - name: Build
       run: cargo build --verbose
