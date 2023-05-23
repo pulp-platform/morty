@@ -9,7 +9,6 @@
 extern crate log;
 
 use anyhow::{anyhow, Context as _, Error, Result};
-use chrono::Local;
 use petgraph::algo::dijkstra;
 use petgraph::graph::{Graph, NodeIndex};
 use rayon::prelude::*;
@@ -26,6 +25,7 @@ use sv_parser::Error as SvParserError;
 use sv_parser::{
     parse_sv_pp, preprocess, unwrap_node, Define, DefineText, Defines, Locate, RefNode, SyntaxTree,
 };
+use time::OffsetDateTime;
 
 pub mod doc;
 mod printer;
@@ -189,7 +189,7 @@ pub fn do_pickle<'a>(
         out,
         "// Compiled by morty-{} / {}\n\n",
         env!("CARGO_PKG_VERSION"),
-        Local::now()
+        OffsetDateTime::now_local().unwrap_or(OffsetDateTime::now_utc())
     )
     .unwrap();
 
@@ -391,7 +391,7 @@ pub fn just_preprocess(syntax_trees: Vec<ParsedFile>, mut out: Box<dyn Write>) -
         out,
         "// Compiled by morty-{} / {}\n\n",
         env!("CARGO_PKG_VERSION"),
-        Local::now()
+        OffsetDateTime::now_local().unwrap_or(OffsetDateTime::now_utc())
     )
     .unwrap();
     for pf in syntax_trees {
