@@ -2,13 +2,13 @@
 
 use super::*;
 use anyhow::{Context as _, Result};
-use chrono::Local;
 use std::{
     fs::write,
     fs::File,
     io::Write,
     path::{Path, PathBuf},
 };
+use time::OffsetDateTime;
 mod static_files;
 
 /// A HTML renderer.
@@ -27,7 +27,7 @@ impl<'a> Renderer<'a> {
             out,
             "<!-- Compiled by morty-{} / {} -->\n",
             env!("CARGO_PKG_VERSION"),
-            Local::now()
+            OffsetDateTime::now_local()?
         )
         .unwrap();
         writeln!(out, "<html>")?;
