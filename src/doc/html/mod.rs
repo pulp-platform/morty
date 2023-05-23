@@ -27,7 +27,7 @@ impl<'a> Renderer<'a> {
             out,
             "<!-- Compiled by morty-{} / {} -->\n",
             env!("CARGO_PKG_VERSION"),
-            OffsetDateTime::now_local()?
+            OffsetDateTime::now_local().unwrap_or(OffsetDateTime::now_utc())
         )
         .unwrap();
         writeln!(out, "<html>")?;

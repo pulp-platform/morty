@@ -189,7 +189,7 @@ pub fn do_pickle<'a>(
         out,
         "// Compiled by morty-{} / {}\n\n",
         env!("CARGO_PKG_VERSION"),
-        OffsetDateTime::now_local()?
+        OffsetDateTime::now_local().unwrap_or(OffsetDateTime::now_utc())
     )
     .unwrap();
 
@@ -391,7 +391,7 @@ pub fn just_preprocess(syntax_trees: Vec<ParsedFile>, mut out: Box<dyn Write>) -
         out,
         "// Compiled by morty-{} / {}\n\n",
         env!("CARGO_PKG_VERSION"),
-        OffsetDateTime::now_local()?
+        OffsetDateTime::now_local().unwrap_or(OffsetDateTime::now_utc())
     )
     .unwrap();
     for pf in syntax_trees {
