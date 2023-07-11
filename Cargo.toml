@@ -35,5 +35,5 @@ path = "src/lib.rs"
 
 [dev-dependencies]
 assert_cmd = "2.0"
-predicates = "2.1"
+predicates = "3"
 assert_fs = "1.0"
