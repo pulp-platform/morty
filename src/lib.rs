@@ -287,12 +287,9 @@ pub fn do_pickle<'a>(
         new_replace_table.sort_by(|a, b| a.0.cmp(&b.0));
 
         // Error on overlapping -> correct overlapping!
-        for i in 0..new_replace_table.len() - 1 {
-            if new_replace_table[i].0 + new_replace_table[i].1 > new_replace_table[i + 1].0 {
-                eprintln!(
-                    "Offset error, please contact Michael\n{:?}",
-                    new_replace_table[i]
-                );
+        for window in new_replace_table.windows(2) {
+            if window[0].0 + window[0].1 > window[1].0 {
+                eprintln!("Offset error, please contact Michael\n{:?}", window[0]);
             }
         }
 
