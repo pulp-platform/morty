@@ -19,7 +19,7 @@ mod tests {
         cmd.arg("-h");
         cmd.assert()
             .success()
-            .stdout(predicate::str::contains("Print version\n"));
+            .stdout(predicate::str::contains("Print version"));
 
         Ok(())
     }
