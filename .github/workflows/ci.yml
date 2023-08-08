@@ -53,6 +53,17 @@ jobs:
         curl https://sh.rustup.rs | sh -s -- -y
         echo "$HOME/.cargo/bin" >> $GITHUB_PATH
       if: matrix.os == 'macos-latest'
+    - name: Install bender
+      run: cargo install bender
+      if: matrix.os == 'ubuntu-latest'
+    - name: Install slang
+      run: |
+        sudo mkdir -p /tools && sudo chmod 777 /tools
+        cd /tools && git clone https://github.com/MikePopoloski/slang.git && cd slang && git checkout v2.0
+        echo $PWD
+        cmake -B build && make -C build && cmake --install build --prefix /tools/install
+        echo "PATH=$PATH:/tools/install/bin" >> ${GITHUB_ENV}
+      if: matrix.os == 'ubuntu-latest'
     - name: Build
       run: cargo build --verbose
     - name: Run tests
