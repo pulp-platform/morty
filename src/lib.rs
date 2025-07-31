@@ -1010,7 +1010,7 @@ pub struct ParsedFile {
     pub defines: Defines,
 }
 
-#[cfg_attr(tarpaulin, skip)]
+#[cfg(not(tarpaulin_include))]
 pub fn print_parse_error(
     printer: &mut printer::Printer,
     error: &SvParserError,
