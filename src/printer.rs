@@ -54,14 +54,14 @@ impl Default for Printer {
 }
 
 impl Printer {
-    #[cfg_attr(tarpaulin, skip)]
+    #[cfg(not(tarpaulin_include))]
     pub fn new() -> Printer {
         Printer {
             term: term::stdout(),
         }
     }
 
-    #[cfg_attr(tarpaulin, skip)]
+    #[cfg(not(tarpaulin_include))]
     fn write(&mut self, dat: &str, color: Color) {
         if let Some(ref mut term) = self.term {
             let term_color = match color {
@@ -113,7 +113,7 @@ impl Printer {
         }
     }
 
-    #[cfg_attr(tarpaulin, skip)]
+    #[cfg(not(tarpaulin_include))]
     fn with_pos<F: FnMut(usize, usize, usize, usize, Option<usize>)>(
         src: &str,
         print_pos: usize,
@@ -150,7 +150,7 @@ impl Printer {
         }
     }
 
-    #[cfg_attr(tarpaulin, skip)]
+    #[cfg(not(tarpaulin_include))]
     fn print_single(
         &mut self,
         src: &str,
@@ -179,7 +179,7 @@ impl Printer {
         });
     }
 
-    #[cfg_attr(tarpaulin, skip)]
+    #[cfg(not(tarpaulin_include))]
     fn print_pretty(
         &mut self,
         src: &str,
@@ -266,7 +266,7 @@ impl Printer {
         });
     }
 
-    #[cfg_attr(tarpaulin, skip)]
+    #[cfg(not(tarpaulin_include))]
     pub fn print_parse_error(
         &mut self,
         path: &Path,
@@ -286,7 +286,7 @@ impl Printer {
         Ok(())
     }
 
-    #[cfg_attr(tarpaulin, skip)]
+    #[cfg(not(tarpaulin_include))]
     pub fn print_error(&mut self, error: &str) -> Result<(), Error> {
         self.write("Error", Color::BrightRed);
         self.write(&format!(": {}", error), Color::BrightWhite);
